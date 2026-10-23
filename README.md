@@ -104,7 +104,7 @@ var mine = await GRush.Trade.MineAsync();
 1. 出品の前に、出すアイテムを手元のセーブで仮置き（使えない状態）にする
 2. `operationId`（`^[A-Za-z0-9._:-]{1,64}$`）をセーブに保存してから `CreateAsync` する
 3. 応答が失われたら、同じ `operationId` で呼び直す。同じ `operationId` の再送は、中身によらず先に作った出品を返す
-4. `MineAsync` の `Pending` をセーブに反映し、クラウドセーブに保存してから `AckAsync` する
+4. `MineAsync` の `Pending` をセーブに反映し、セーブを永続化してから `AckAsync` する（`AckAsync` に渡せる id は 1 回 50 件まで）
 5. 反映済みの取引 ID をセーブに持ち、同じ取引を二度反映しない
 
 `Pending` の `Action` は `ReceiveGive`（出品者が `GiveJson` を受け取る）・`ReturnOffer`（出品者が `OfferJson` を戻す。取り下げ・期限切れ・運営の非表示）・`ReceiveOffer`（受けた側が `OfferJson` を受け取る）。`Unknown` は反映せず、Ack もしない。
