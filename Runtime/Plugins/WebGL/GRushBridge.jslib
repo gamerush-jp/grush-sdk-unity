@@ -4,6 +4,7 @@ var GRushBridgeLibrary = {
     onNet: 0,
     unbind: null,
     unbindLocale: null,
+    unbindPlayerStatePreview: null,
 
     api: function (name) {
       return typeof window === "undefined" ? null : window[name] || null;
@@ -372,6 +373,36 @@ var GRushBridgeLibrary = {
     });
   },
   GRushJsLocaleSubscribe__deps: ["$GRushBridge", "malloc", "free"],
+
+  // The snapshot travels in the same {"state": ...} shape as playerState.getMine, so the game reads it the same way.
+  GRushJsPlayerStatePreviewSubscribe: function (onPreview) {
+    var states = GRushBridge.api("GRushPlayerState");
+    if (!states || typeof states.onPreview !== "function" || GRushBridge.unbindPlayerStatePreview) return;
+    try {
+      GRushBridge.unbindPlayerStatePreview = states.onPreview(function (snapshot) {
+        var text = JSON.stringify({ state: GRushBridge.state(snapshot) });
+        var size = lengthBytesUTF8(text) + 1;
+        var ptr = _malloc(size);
+        stringToUTF8(text, ptr, size);
+        {{{ makeDynCall("vii", "onPreview") }}}(ptr, size - 1);
+        _free(ptr);
+      });
+    } catch (error) {
+      GRushBridge.unbindPlayerStatePreview = null;
+    }
+  },
+  GRushJsPlayerStatePreviewSubscribe__deps: ["$GRushBridge", "malloc", "free"],
+
+  GRushJsPlayerStatePreviewUnsubscribe: function () {
+    var unbind = GRushBridge.unbindPlayerStatePreview;
+    GRushBridge.unbindPlayerStatePreview = null;
+    if (typeof unbind === "function") {
+      try {
+        unbind();
+      } catch (error) {}
+    }
+  },
+  GRushJsPlayerStatePreviewUnsubscribe__deps: ["$GRushBridge"],
 
   GRushJsSend: function (dataPtr, length, channel, to) {
     var net = GRushBridge.api("GRushNet");

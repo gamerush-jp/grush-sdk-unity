@@ -11,6 +11,7 @@ namespace GRushSdk
         : IGRushBackend,
             IGRushShareBackend,
             IGRushLocaleBackend,
+            IGRushPlayerStatePreviewBackend,
             IGRushLaunchBackend,
             IGRushAnalyticsBackend
     {
@@ -57,6 +58,20 @@ namespace GRushSdk
 
         [DllImport("__Internal")]
         private static extern string GRushJsLaunchCurrent();
+
+        private delegate void PlayerStatePreviewCallback(IntPtr json, int length);
+
+        [DllImport("__Internal")]
+        private static extern void GRushJsPlayerStatePreviewSubscribe(
+            PlayerStatePreviewCallback onPreview
+        );
+
+        [DllImport("__Internal")]
+        private static extern void GRushJsPlayerStatePreviewUnsubscribe();
+
+        private static readonly PlayerStatePreviewCallback PlayerStatePreviewHandler =
+            OnPlayerStatePreview;
+        private static Action<string> playerStatePreviewHandler;
 
         private static readonly LocaleCallback LocaleHandler = OnLocale;
         private static Action<string> localeHandler;
@@ -137,6 +152,21 @@ namespace GRushSdk
             }
         }
 
+        // GameRush の onPreview はハンドラを1つだけ持つので、JS への登録はハンドラの有無が変わったときだけにする。
+        public void SetPlayerStatePreviewHandler(Action<string> handler)
+        {
+            var had = playerStatePreviewHandler != null;
+            playerStatePreviewHandler = handler;
+            if (!had && handler != null)
+            {
+                GRushJsPlayerStatePreviewSubscribe(PlayerStatePreviewHandler);
+            }
+            else if (had && handler == null)
+            {
+                GRushJsPlayerStatePreviewUnsubscribe();
+            }
+        }
+
         public string LaunchCurrentJson()
         {
             return GRushJsLaunchCurrent();
@@ -205,6 +235,18 @@ namespace GRushSdk
         private static void OnLocale(IntPtr json, int length)
         {
             var handler = localeHandler;
+            if (handler == null)
+            {
+                return;
+            }
+            var text = ReadString(json, length);
+            GRushDispatcher.Post(() => handler(text));
+        }
+
+        [MonoPInvokeCallback(typeof(PlayerStatePreviewCallback))]
+        private static void OnPlayerStatePreview(IntPtr json, int length)
+        {
+            var handler = playerStatePreviewHandler;
             if (handler == null)
             {
                 return;

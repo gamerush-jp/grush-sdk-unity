@@ -7,6 +7,7 @@ namespace GRushSdk
         : IGRushBackend,
             IGRushShareBackend,
             IGRushLocaleBackend,
+            IGRushPlayerStatePreviewBackend,
             IGRushLaunchBackend,
             IGRushAnalyticsBackend
     {
@@ -15,6 +16,7 @@ namespace GRushSdk
 
         private Action<GRushNetEvent> netHandler;
         private Action<string> localeHandler;
+        private Action<string> playerStatePreviewHandler;
         private int localIndex = -1;
 
         public bool IsAvailable
@@ -22,10 +24,10 @@ namespace GRushSdk
             get { return true; }
         }
 
-        // モックが実装している一番新しい機能（共有に添える起動パラメータ）の版数。
+        // モックが実装している一番新しい機能（確認用の表示）の版数。
         public int ProtocolVersion
         {
-            get { return GRush.ShareLaunchProtocolVersion; }
+            get { return GRush.PlayerStatePreviewProtocolVersion; }
         }
 
         public bool IsAnalyticsAvailable
@@ -195,6 +197,24 @@ namespace GRushSdk
             {
                 GRushDispatcher.Post(() => handler(json));
             }
+        }
+
+        public void SetPlayerStatePreviewHandler(Action<string> handler)
+        {
+            var previous = playerStatePreviewHandler;
+            playerStatePreviewHandler = null;
+            if (previous != null)
+            {
+                GRushMockPlayerStatePreview.SetHandler(null, previous);
+            }
+            if (handler == null)
+            {
+                return;
+            }
+            // GameRush と同じく、受け取ったときに同期で呼ばず、次の Update で渡す。
+            Action<string> posted = json => GRushDispatcher.Post(() => handler(json));
+            playerStatePreviewHandler = posted;
+            GRushMockPlayerStatePreview.SetHandler(posted, null);
         }
 
         private GRushRpcResponse Handle(string method, string paramsJson)

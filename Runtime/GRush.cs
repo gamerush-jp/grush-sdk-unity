@@ -28,6 +28,9 @@ namespace GRushSdk
         /// </summary>
         public const int ShareLaunchProtocolVersion = 9;
 
+        /// <summary>確認用の表示の写しを受け取る（<c>PlayerState.PreviewReceived</c>）のに要る版数。</summary>
+        public const int PlayerStatePreviewProtocolVersion = 10;
+
         public const int MaxMessageBytes = 8 * 1024;
 
         private static IGRushBackend backend;
@@ -106,6 +109,14 @@ namespace GRushSdk
         public static bool IsLaunchAvailable
         {
             get { return IsAvailable && Backend.ProtocolVersion >= LaunchProtocolVersion; }
+        }
+
+        /// <summary>
+        /// 確認用の表示の写しを受け取れるか（<c>PlayerState.PreviewReceived</c>）。古いランタイムと GameRush の外では false。
+        /// </summary>
+        public static bool IsPlayerStatePreviewAvailable
+        {
+            get { return IsAvailable && Backend.ProtocolVersion >= PlayerStatePreviewProtocolVersion; }
         }
 
         public static bool IsAvailable
@@ -242,7 +253,7 @@ namespace GRushSdk
 
         /// <summary>
         /// バックエンドを差し替える。null なら実行環境に合うものを作り直す。
-        /// 登録済みの <c>Locale.Changed</c> は新しいバックエンドの通知を受け続ける。
+        /// 登録済みの <c>Locale.Changed</c> と <c>PlayerState.PreviewReceived</c> は新しいバックエンドの通知を受け続ける。
         /// </summary>
         public static void UseBackend(IGRushBackend replacement)
         {
@@ -254,15 +265,16 @@ namespace GRushSdk
             net = null;
             player = null;
             leaderboards = null;
-            playerState = null;
             share = null;
             analytics = null;
             inbox = null;
             trade = null;
             launch = null;
             backend = replacement ?? GRushBackendFactory.Create();
-            // Locale は作り直さない。作者が登録した Changed を新しいバックエンドで受け続ける。
+            // Locale と PlayerState は作り直さない。作者が登録した Changed と PreviewReceived を新しいバックエンドで受け続ける。
+            // PlayerState は前のバックエンドから外すのも RebindPreview が受け持つ。
             locale?.Rebind();
+            playerState?.RebindPreview();
         }
 
         internal static Task<GRushResult<string>> CallAsync(string method, string paramsJson)

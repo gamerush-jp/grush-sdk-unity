@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 
 namespace GRushSdk
@@ -19,6 +20,73 @@ namespace GRushSdk
     /// </summary>
     public sealed class GRushPlayerStateApi
     {
+        private Action<GRushPlayerStatePage> previewReceived;
+        private GRushPlayerStatePreviewSubscription previewSubscription;
+
+        /// <summary>
+        /// GameRush の確認用の表示で、ある公開プレイヤー状態の写しが渡されたときに呼ばれる。
+        /// 受け取ったら、その状態が他プレイヤーにどう見えるかを、普段と同じ描き方で描く。
+        ///
+        /// 渡す <see cref="GRushPlayerStatePage"/> は <see cref="GetMineAsync"/> と同じ形で、
+        /// <c>States</c> に1件、<c>Exists</c> が true、<c>RawJson</c> は <c>{"state":{...}}</c>
+        /// （payload はここから読む）。自分の状態とは限らない。
+        ///
+        /// 次の <c>Update</c> で呼ばれる。同じ写しは1回だけ渡り、購読より前に届いた写しは購読したときに渡る。
+        /// 購読が1つ以上あるあいだだけ GameRush から受け取り、すべて外すと受け取りをやめる。
+        /// 普段のプレイでは呼ばれない。<see cref="GRush.IsPlayerStatePreviewAvailable"/> が false
+        /// （<c>protocolVersion</c> 10 未満）と GameRush の外では呼ばれず、例外も投げない。
+        /// <see cref="GRush.UseBackend"/> でバックエンドを差し替えても、登録済みの購読は続く。
+        /// </summary>
+        public event Action<GRushPlayerStatePage> PreviewReceived
+        {
+            add
+            {
+                previewReceived += value;
+                PreviewSubscription().Subscribe(PreviewBackend(), previewReceived != null);
+            }
+            remove
+            {
+                previewReceived -= value;
+                if (previewReceived == null)
+                {
+                    PreviewSubscription().Unsubscribe();
+                }
+            }
+        }
+
+        // GRush.UseBackend の後に呼ぶ。登録済みの PreviewReceived を新しいバックエンドへつなぎ直す。
+        internal void RebindPreview()
+        {
+            PreviewSubscription().Rebind(PreviewBackend(), previewReceived != null);
+        }
+
+        // フィールドの初期化子からは OnPreview を渡せないので、最初に使うときに作る。
+        private GRushPlayerStatePreviewSubscription PreviewSubscription()
+        {
+            if (previewSubscription == null)
+            {
+                previewSubscription = new GRushPlayerStatePreviewSubscription(OnPreview);
+            }
+            return previewSubscription;
+        }
+
+        private static IGRushPlayerStatePreviewBackend PreviewBackend()
+        {
+            return GRush.IsPlayerStatePreviewAvailable
+                ? GRush.Backend as IGRushPlayerStatePreviewBackend
+                : null;
+        }
+
+        private void OnPreview(string json)
+        {
+            var page = SinglePage(json);
+            var handler = previewReceived;
+            if (page.Exists && handler != null)
+            {
+                handler(page);
+            }
+        }
+
         /// <summary>自分の状態を読む。運営が伏せていても本人には返る。</summary>
         public async Task<GRushResult<GRushPlayerStatePage>> GetMineAsync()
         {
@@ -222,27 +290,28 @@ namespace GRushSdk
             {
                 return GRushResult<GRushPlayerStatePage>.Failure(response.Code, response.Message);
             }
-            var wire = GRushWire.Parse<GRushPlayerStateEnvelope>(response.Value);
+            return GRushResult<GRushPlayerStatePage>.Success(SinglePage(response.Value));
+        }
+
+        // {"state":{...}} を1件のページにする。state が無ければ（まだ書いていない場合は state: null）Exists が false。
+        private static GRushPlayerStatePage SinglePage(string json)
+        {
+            var wire = GRushWire.Parse<GRushPlayerStateEnvelope>(json);
             if (wire == null || wire.state == null || string.IsNullOrEmpty(wire.state.pseudoId))
             {
-                // まだ書いていない場合はここへ来る（state: null）。
-                return GRushResult<GRushPlayerStatePage>.Success(
-                    new GRushPlayerStatePage
-                    {
-                        States = new GRushPlayerState[0],
-                        Exists = false,
-                        RawJson = response.Value,
-                    }
-                );
-            }
-            return GRushResult<GRushPlayerStatePage>.Success(
-                new GRushPlayerStatePage
+                return new GRushPlayerStatePage
                 {
-                    States = new[] { GRushWire.ToPlayerState(wire.state) },
-                    Exists = true,
-                    RawJson = response.Value,
-                }
-            );
+                    States = new GRushPlayerState[0],
+                    Exists = false,
+                    RawJson = json,
+                };
+            }
+            return new GRushPlayerStatePage
+            {
+                States = new[] { GRushWire.ToPlayerState(wire.state) },
+                Exists = true,
+                RawJson = json,
+            };
         }
     }
 }

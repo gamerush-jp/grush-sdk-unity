@@ -7,7 +7,7 @@ GameRush の GameAPI を Unity から呼ぶための UPM パッケージ。ビ�
 Package Manager の `Add package from git URL...` に次を入れる。
 
 ```text
-https://github.com/gamerush-cc/grush-sdk-unity.git#v1.11.1
+https://github.com/gamerush-cc/grush-sdk-unity.git#v1.12.0
 ```
 
 Unity 2021.3 以降。ビルドターゲットは WebGL。
@@ -49,6 +49,20 @@ if (found.Ok)
 ```
 
 `SampleAsync` は同じゲームの他プレイヤーの公開状態をランダムに返す（件数は 1〜20、既定 10）。自分と運営が伏せた状態は返らず、名前も返らない。範囲を渡すと、rating の無い状態は返らない。payload は `RawJson`（応答そのもの）から読む。`SetMineAsync` の第3引数の rating は -1e9 より大きく 1e9 より小さい数値で、`null` で消し、2引数の版では今の値のまま。`GRushPlayerState.HasRating` が false なら rating は書かれていない。`GRush.IsMatchmakingAvailable` が `false`（`protocolVersion` 7 未満）では `SampleAsync` が `Unsupported`、`SetMineAsync` は rating を送らずに payload だけを書く。
+
+### 確認用の表示
+
+GameRush の確認用の表示では、公開プレイヤー状態の写しがゲームに渡る。受け取ったら、その状態が他プレイヤーにどう見えるかを、普段と同じ描き方で描く。
+
+```csharp
+GRush.PlayerState.PreviewReceived += page =>
+{
+    var state = page.States[0];
+    ShowRival(state.PseudoId, page.RawJson); // payload は RawJson の state.payload から読む
+};
+```
+
+渡る `GRushPlayerStatePage` は `GetMineAsync` と同じ形で、`States` に1件、`Exists` が `true`、`RawJson` は `{"state":{...}}`。自分の状態とは限らない。`PreviewReceived` は次の `Update` で呼ばれ、同じ写しは1回だけ渡る。購読より前に届いた写しは購読したときに渡るので、起動の早いうちに購読しておけばよい。購読が1つ以上あるあいだだけ GameRush から受け取り、すべて外すと受け取りをやめる。普段のプレイでは呼ばれない。`GRush.IsPlayerStatePreviewAvailable` が `false`（`protocolVersion` 10 未満）と GameRush の外では呼ばれず、例外も投げない。`GRush.UseBackend` でバックエンドを差し替えても、登録済みの `PreviewReceived` は新しいバックエンドの写しを受け続ける。
 
 ### 受信箱
 
@@ -218,7 +232,7 @@ opponent.Received += message => opponent.Send(reply, GRushChannel.Unreliable, GR
 
 共有のモックは確認シートを出さず、`GRushMock.ShareStatus`（既定 `Opened`）を返す。`GRushMock.ShareAvailable = false` で共有できない環境を試せる。起動パラメータは GameRush と同じ制限で確かめ、合わなければ `InvalidParams`。本文と画像の検査はしない。
 
-アナリティクスのモックは、GameRush と同じ検査をして、通ったイベントを1件ずつ Console に出し、直近の 200 件を `GRushMock.AnalyticsEvents`（GameRush へ渡すのと同じ形の JSON の配列）で返す（`GRushMock.Reset()` で空になる）。弾いたイベントは、GameRush と同じく理由ごとに1回だけ警告する（`GRushMock.Reset()` でまた出る）。どこへも送らない。前面に出るまでの 30 件の溜め・本体の上限・同じステップを最初の1回だけ残す扱い・セッションあたりの上限は再現しないので、モックでは `true` の分がすべて記録に残る。モックが名乗る `protocolVersion` は 9。
+アナリティクスのモックは、GameRush と同じ検査をして、通ったイベントを1件ずつ Console に出し、直近の 200 件を `GRushMock.AnalyticsEvents`（GameRush へ渡すのと同じ形の JSON の配列）で返す（`GRushMock.Reset()` で空になる）。弾いたイベントは、GameRush と同じく理由ごとに1回だけ警告する（`GRushMock.Reset()` でまた出る）。どこへも送らない。前面に出るまでの 30 件の溜め・本体の上限・同じステップを最初の1回だけ残す扱い・セッションあたりの上限は再現しないので、モックでは `true` の分がすべて記録に残る。モックが名乗る `protocolVersion` は 10。
 
 相手探し・受信箱・交換所のモックは、`GRushMock.Rivals` の 3 人の相手を持つ。相手はそれぞれ rating 付きの公開プレイヤー状態を持ち、届いたメッセージを同じ kind と payload で送り返す。はじめと `GRushMock.Reset()` の後は、最初の相手からのメッセージ1通と、相手の受付中の出品を2件持つ。payload・offer・want・give の形、`operationId` での冪等、受付中の出品の上限、受諾の `Outcome`、`Pending` と Ack は GameRush と同じ規則で動く。通報を承諾すると（`GRushMock.ConfirmInboxReport` / `ConfirmTradeReport`、既定 `true`）相手をブロックし、その相手のメッセージと出品は見えなくなる。プレイヤー状態の通報は伏せていない状態にだけ届き、確認の答えを `GRushMock.ConfirmPlayerStateReport`（既定 `true`）で決める。
 
@@ -228,7 +242,10 @@ var listingId = GRushMockTrades.OfferToSelf(GRushMock.Rivals[1], "{\"item\":\"bo
 GRushMockTrades.Accept(myTradeId, "{\"item\":\"gem\"}"); // 相手が受けて、自分の Pending に ReceiveGive が載る
 GRushMockTrades.Expire(listingId);
 GRushMockPlayerStates.Define("custom-rival", "{\"level\":3}", false, 1300);
+GRushMockPlayerStates.Preview(GRushMock.Rivals[0], "{\"level\":3}"); // 確認用の表示の写しを渡す
 ```
+
+確認用の表示のモックは `GRushMockPlayerStates.Preview(pseudoId, payloadJson)` で写しを1つ渡し、次の `Update` で `PreviewReceived` が呼ばれる。`Preview(pseudoId, payloadJson, revision, rating)` で revision と rating を決められる（既定は revision 1、rating は無し。`null` なら rating は無し）。updatedAt は呼んだ時刻（UTC）。購読が無いうちに渡した写しは、次に購読したときに1回だけ届く。疑似 ID が空・payload が JSON オブジェクトでない・revision が負・rating が NaN か無限大のときは何もしない。`GRushMockPlayerStates.Reset()` で、まだ届いていない写しを捨てる。
 
 **`UnreliableDropRate` は既定 0 だが、出荷前に必ず 0 より大きくして試すこと。** WebSocket 中継では `unreliable` も落ちずに届くため、パケットが落ちる前提で書けているかを確認できる場所はエディタのモックだけになる。
 

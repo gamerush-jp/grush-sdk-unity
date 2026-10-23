@@ -54,11 +54,34 @@ namespace GRushSdk
             Put(pseudoId, payloadJson, hidden, true, rating);
         }
 
-        /// <summary>置いた状態を消し、モックの相手の状態を置き直す。</summary>
+        /// <summary>
+        /// GameRush の確認用の表示を真似て、公開プレイヤー状態の写しを1つ渡す。revision は 1、rating は無し、
+        /// updatedAt は呼んだ時刻（UTC）。<see cref="Define(string, string)"/> で置いた状態とは別で、そちらは変えない。
+        /// </summary>
+        public static void Preview(string pseudoId, string payloadJson)
+        {
+            Preview(pseudoId, payloadJson, 1, null);
+        }
+
+        /// <summary>
+        /// 確認用の表示の写しを、revision と rating を決めて渡す。<paramref name="rating"/> が null なら rating は無し
+        /// （<c>GRushPlayerState.HasRating</c> が false）。
+        ///
+        /// <c>GRush.PlayerState.PreviewReceived</c> が次の <c>Update</c> で呼ばれる。購読が無いうちに渡した写しは、
+        /// 次に購読したときに渡る。同じ写しは1回だけ渡る。
+        /// 疑似 ID が空・payload が JSON オブジェクトでない・revision が負・rating が NaN か無限大のときは何もしない。
+        /// </summary>
+        public static void Preview(string pseudoId, string payloadJson, int revision, double? rating)
+        {
+            GRushMockPlayerStatePreview.Push(pseudoId, payloadJson, revision, rating);
+        }
+
+        /// <summary>置いた状態を消し、モックの相手の状態を置き直す。まだ届いていない確認用の表示の写しも捨てる。</summary>
         public static void Reset()
         {
             states.Clear();
             SeedRivals();
+            GRushMockPlayerStatePreview.Reset();
         }
 
         internal static bool Exists(string pseudoId)
