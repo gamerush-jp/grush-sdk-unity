@@ -1,6 +1,6 @@
 {
   "name": "cc.gamerush.sdk",
-  "version": "1.12.0",
+  "version": "1.12.1",
   "displayName": "GameRush SDK",
   "description": "GameRush の GameAPI を Unity から呼ぶための SDK。プレイヤー疑似ID・プロフィール同意・ランキング・公開プレイヤー状態・受信箱・交換所・共有・表示言語・起動パラメータ・アナリティクス・リアルタイムマルチプレイに対応し、エディタとスタンドアロンではモックへ落ちる。",
   "unity": "2021.3",

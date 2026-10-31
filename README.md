@@ -7,7 +7,7 @@ GameRush の GameAPI を Unity から呼ぶための UPM パッケージ。ビ�
 Package Manager の `Add package from git URL...` に次を入れる。
 
 ```text
-https://github.com/gamerush-jp/grush-sdk-unity.git#v1.12.0
+https://github.com/gamerush-jp/grush-sdk-unity.git#v1.12.1
 ```
 
 Unity 2021.3 以降。ビルドターゲットは WebGL。
