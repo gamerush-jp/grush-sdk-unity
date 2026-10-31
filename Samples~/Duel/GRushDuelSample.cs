@@ -31,7 +31,10 @@ public class GRushDuelSample : MonoBehaviour
         if (Application.platform != RuntimePlatform.WebGLPlayer)
         {
             sparring = GRushMock.AddPeer("Sparring Partner");
-            sparring.Received += OnSparringMessage;
+            if (sparring != null)
+            {
+                sparring.Received += OnSparringMessage;
+            }
         }
 
         var joined = await GRush.Net.JoinAsync("duel");
