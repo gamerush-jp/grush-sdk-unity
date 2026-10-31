@@ -108,8 +108,9 @@ namespace GRushSdk.Editor
             if (upload.Done)
             {
                 EditorGUILayout.HelpBox(
-                    "アップロードが終わりました。限定公開（unlisted）と一般公開（public）は"
-                        + "審査を通ってから遊べる状態になります。状況は Studio で確認してください。",
+                    "アップロードが終わりました。限定公開（unlisted）のゲームは、URL を知っている人がすぐ遊べます。"
+                        + "一般公開（public）のゲームで審査が要るときは、承認されてから新しいビルドが配信されます。"
+                        + "配信の状況は Studio で確認してください。",
                     MessageType.Info
                 );
                 if (!string.IsNullOrEmpty(upload.EntryUrl))

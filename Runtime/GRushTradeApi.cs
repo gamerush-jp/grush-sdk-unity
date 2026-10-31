@@ -16,8 +16,8 @@ namespace GRushSdk
     /// 1. 出品の前に、出すアイテムを手元のセーブで仮置き（使えない状態）にする。
     /// 2. operationId をセーブに保存してから <see cref="CreateAsync(string, string, string)"/> を呼ぶ。
     /// 3. 応答が失われたら、同じ operationId で呼び直す。同じ operationId の再送は先に作った出品を返す。
-    /// 4. <see cref="MineAsync"/> の Pending をセーブに反映し、クラウドセーブに保存してから
-    ///    <see cref="AckAsync"/> する。
+    /// 4. <see cref="MineAsync"/> の Pending をセーブに反映し、セーブを永続化してから
+    ///    <see cref="AckAsync"/> する（ack に渡せる id は 1 回 50 件まで）。
     /// 5. 反映済みの取引 ID をセーブに持ち、同じ取引を二度反映しない。
     ///
     /// <see cref="GRush.IsTradeAvailable"/> が false の古いランタイムでは、どの呼び出しも Unsupported。

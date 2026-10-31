@@ -178,7 +178,8 @@ namespace GRushSdk.Editor
                 VisibilityLabels
             );
             EditorGUILayout.HelpBox(
-                "限定公開（unlisted）も審査の対象です。作った直後は遊べる状態になりません。"
+                "限定公開（unlisted）は審査しません。ビルドのアップロードが終わると、URL を知っている人がすぐ遊べます。"
+                    + "問題のある作品には、通報・運営による公開保留・アカウントの利用停止で対応します。"
                     + "一般公開（public）への申請は Studio から行います。",
                 MessageType.Info
             );

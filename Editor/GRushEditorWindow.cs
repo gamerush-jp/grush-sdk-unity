@@ -20,7 +20,7 @@ namespace GRushSdk.Editor
         private static readonly string[] VisibilityLabels =
         {
             "非公開（private）",
-            "限定公開（unlisted・審査あり）",
+            "限定公開（unlisted・審査なし）",
         };
 
         private readonly GRushVersionGate gate = new GRushVersionGate();
