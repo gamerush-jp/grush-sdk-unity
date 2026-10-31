@@ -408,17 +408,35 @@ namespace GRushSdk
             return GRushRpcResponse.Success(PlayerJson(true));
         }
 
+        // GameRush と同じく、今の部屋を先に抜け、失敗しても戻らない。形の誤りはゲームが直すので InvalidParams、
+        // 埋まった部屋は待てば入れるので Unavailable で返す。
         private GRushRpcResponse Join(string paramsJson)
         {
+            if (localIndex >= 0)
+            {
+                GRushMockHub.Instance.Leave(localIndex);
+                localIndex = -1;
+            }
             var request = GRushWire.Parse<GRushJoinParamsWire>(paramsJson);
+            var mode = request == null ? null : request.mode;
+            var roomCode = request == null ? null : request.roomCode;
+            var error = GRushMockNetParams.Validate(mode, roomCode);
+            if (error != null)
+            {
+                return GRushRpcResponse.Failure(GRushErrorCode.InvalidParams, error);
+            }
             var wire = GRushMockHub.Instance.Join(
-                request == null ? "default" : request.mode,
-                request == null ? null : request.roomCode,
+                GRushMockNetParams.NormalizeMode(mode),
+                GRushMockNetParams.NormalizeRoomCode(roomCode),
                 PseudoId,
                 Consented ? GRushMock.DisplayName : null,
                 Consented ? GRushMock.AvatarUrl : null,
                 OnHubEvent
             );
+            if (wire == null)
+            {
+                return GRushRpcResponse.Failure(GRushErrorCode.Unavailable, "The mock room is full.");
+            }
             localIndex = wire.localPeerIndex;
             return GRushRpcResponse.Success(JsonUtility.ToJson(wire));
         }

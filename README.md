@@ -222,7 +222,9 @@ var opponent = GRushMock.AddPeer("Sparring Partner");
 opponent.Received += message => opponent.Send(reply, GRushChannel.Unreliable, GRushRoom.Everyone);
 ```
 
-`GRushMock.AddPeer` で作った相手は同じプロセス内の2人目の peer として部屋に入り、送受信が実際に往復する。
+`GRushMock.AddPeer` で作った相手は同じプロセス内の2人目の peer として部屋に入り、送受信が実際に往復する。部屋が8人で埋まっていれば `null` を返す。
+
+モックの `GRush.Net.JoinAsync` は GameRush と同じく、`mode`（英数字と `._:-` の1〜32文字）か `roomCode`（英数字の4〜12文字）の形が違えば `InvalidParams` で失敗する。部屋が埋まっていれば `Unavailable` で失敗する。
 
 `GRushMock.RaiseRoomError(code, message)` は、自分がいる部屋に `GRushRoom.Error` を届ける（次のフレーム以降に届き、部屋は閉じない）。部屋にいなければ `false` を返す。
 

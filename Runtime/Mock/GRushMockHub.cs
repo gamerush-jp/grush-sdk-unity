@@ -49,13 +49,22 @@ namespace GRushSdk
             Action<GRushNetEvent> deliver
         )
         {
-            if (string.IsNullOrEmpty(roomCode))
+            var index = NextFreeIndex();
+            if (index < 0)
             {
-                roomCode = string.IsNullOrEmpty(requestedCode) ? "MOCKROOM" : requestedCode;
+                return null;
+            }
+            if (!string.IsNullOrEmpty(requestedCode))
+            {
+                roomCode = requestedCode;
+            }
+            else if (string.IsNullOrEmpty(roomCode))
+            {
+                roomCode = "MOCKROOM";
             }
             var local = new GRushMockMember
             {
-                Index = NextFreeIndex(),
+                Index = index,
                 PseudoId = pseudoId,
                 DisplayName = displayName,
                 AvatarUrl = avatarUrl,
@@ -71,7 +80,7 @@ namespace GRushSdk
             Announce(local, GRushNetEventKind.PeerJoin);
             return new GRushJoinWire
             {
-                roomId = "mock:" + (string.IsNullOrEmpty(mode) ? "default" : mode) + ":" + roomCode,
+                roomId = "mock:" + mode + ":" + roomCode,
                 roomCode = roomCode,
                 localPeerIndex = local.Index,
                 peers = existing.ToArray(),
@@ -84,9 +93,14 @@ namespace GRushSdk
 
         public GRushMockPeer AddPeer(string displayName, string avatarUrl)
         {
+            var index = NextFreeIndex();
+            if (index < 0)
+            {
+                return null;
+            }
             var peer = new GRushMockPeer
             {
-                Index = NextFreeIndex(),
+                Index = index,
                 PseudoId = "mock-peer-" + Guid.NewGuid().ToString("N").Substring(0, 8),
                 DisplayName = displayName,
                 AvatarUrl = avatarUrl,
@@ -245,7 +259,7 @@ namespace GRushSdk
                     return index;
                 }
             }
-            return GRushMockLimits.MaxPeers - 1;
+            return -1;
         }
 
         private int HostIndex()

@@ -40,11 +40,17 @@ namespace GRushSdk
             get { return (string[])rivals.Clone(); }
         }
 
+        /// <summary>
+        /// 同じプロセスの中の相手を部屋に入れる。部屋が埋まっていれば null を返す。
+        /// </summary>
         public static GRushMockPeer AddPeer(string displayName)
         {
             return AddPeer(displayName, null);
         }
 
+        /// <summary>
+        /// 同じプロセスの中の相手を、アバターの URL 付きで部屋に入れる。部屋が埋まっていれば null を返す。
+        /// </summary>
         public static GRushMockPeer AddPeer(string displayName, string avatarUrl)
         {
             return GRushMockHub.Instance.AddPeer(displayName, avatarUrl);
