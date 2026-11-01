@@ -5,25 +5,67 @@ namespace GRushSdk
 {
     /// <summary>
     /// モックの <c>playerState.setMine</c> が payload を検査する。サーバと同じく、
-    /// JSON オブジェクトであることと、空白を除いた JSON の UTF-8 のバイト数が 4KB 以下で
-    /// あることを求める。
+    /// JSON オブジェクトであること、配列とオブジェクトの入れ子が 3000 段以下であること、
+    /// キーと文字列に対になっていないサロゲートが無いこと、空白を除いた JSON の UTF-8 の
+    /// バイト数が 4KB 以下であることを、この順に求める。
     /// </summary>
     internal static class GRushMockPlayerStatePayload
     {
         public const int MaxBytes = 4 * 1024;
 
+        /// <summary>
+        /// 入れ子の段数の上限。値を囲む配列とオブジェクトの数で数え、スカラーは 0 段、
+        /// <c>[]</c> と <c>{}</c> は 1 段。
+        /// </summary>
+        public const int MaxDepth = 3000;
+
         public const string NotObjectMessage = "Player state payload must be a JSON object.";
+        public const string TooDeepMessage = "Player state payload is nested too deeply.";
+        public const string LoneSurrogateMessage =
+            "Player state payload must not contain lone surrogates.";
         public const string TooLargeMessage = "Player state payload is too large.";
+
+        // GameRush は辿る値の数にも上限を置くが、ここでは数えない。payload は JSON の文字列で来るので
+        // 値の数は文字数を超えず、その上限に届く payload は 4KB を大きく超えて、同じ InvalidParams で弾かれる。
 
         /// <summary>通るなら null、弾くならエラーの文言を返す。</summary>
         public static string Validate(string payloadJson)
         {
-            long bytes;
-            if (!TryMeasureObject(payloadJson, out bytes))
+            var scanner = ScanObject(payloadJson);
+            if (scanner == null)
             {
                 return NotObjectMessage;
             }
-            return bytes > MaxBytes ? TooLargeMessage : null;
+            if (scanner.Deepest > MaxDepth)
+            {
+                return TooDeepMessage;
+            }
+            if (scanner.LoneSurrogate)
+            {
+                return LoneSurrogateMessage;
+            }
+            return scanner.Bytes > MaxBytes ? TooLargeMessage : null;
+        }
+
+        /// <summary>
+        /// <paramref name="text"/> に、対になっていないサロゲート（UTF-16 の文字列を文字の途中で
+        /// 切った切れ端）があるか。
+        /// </summary>
+        internal static bool HasLoneSurrogate(string text)
+        {
+            for (var index = 0; index < text.Length; index++)
+            {
+                if (!char.IsSurrogate(text[index]))
+                {
+                    continue;
+                }
+                if (!char.IsSurrogatePair(text, index))
+                {
+                    return true;
+                }
+                index++;
+            }
+            return false;
         }
 
         /// <summary>
@@ -35,24 +77,26 @@ namespace GRushSdk
         /// </summary>
         public static bool TryMeasureObject(string json, out long bytes)
         {
-            bytes = 0;
+            var scanner = ScanObject(json);
+            bytes = scanner == null ? 0 : scanner.Bytes;
+            return scanner != null;
+        }
+
+        // 1つの JSON オブジェクトとして読めたら、読み終えた Scanner を返す。読めなければ null。
+        private static Scanner ScanObject(string json)
+        {
             if (json == null)
             {
-                return false;
+                return null;
             }
             var scanner = new Scanner(json);
             scanner.SkipWhitespace();
             if (scanner.Peek() != '{' || !scanner.Document())
             {
-                return false;
+                return null;
             }
             scanner.SkipWhitespace();
-            if (!scanner.AtEnd)
-            {
-                return false;
-            }
-            bytes = scanner.Bytes;
-            return true;
+            return scanner.AtEnd ? scanner : null;
         }
 
         /// <summary>
@@ -165,6 +209,12 @@ namespace GRushSdk
 
             public long Bytes;
 
+            // 読んだ中で最も深い入れ子の段数。
+            public int Deepest;
+
+            // キーか文字列の値に、エスケープを解いた後で対になっていないサロゲートがあったか。
+            public bool LoneSurrogate;
+
             public Scanner(string text)
             {
                 this.text = text;
@@ -193,8 +243,8 @@ namespace GRushSdk
                 }
             }
 
-            // 入れ子は再帰ではなく閉じ括弧の積み上げで追う。サーバは深さを制限しないので
-            // 深さでは弾かず、深い入れ子でも再帰がスタックを使い切って Editor ごと落ちない。
+            // 入れ子は再帰ではなく閉じ括弧の積み上げで追う。深い入れ子でも再帰がスタックを
+            // 使い切って Editor ごと落ちない。深さの上限は、読み終えてから Validate が見る。
             public bool Document()
             {
                 var closers = new List<char>();
@@ -204,6 +254,7 @@ namespace GRushSdk
                     var c = Peek();
                     if (c == '{' || c == '[')
                     {
+                        Deepest = System.Math.Max(Deepest, closers.Count + 1);
                         var close = c == '{' ? '}' : ']';
                         Take(1);
                         SkipWhitespace();
@@ -289,9 +340,13 @@ namespace GRushSdk
                 }
             }
 
+            // サーバは JSON を読んだ後の文字列を見るので、エスケープを解いた UTF-16 の並びで
+            // サロゲートが対になっているかを確かめる。上位と下位を別々のエスケープで書いた対も、
+            // 生の文字とエスケープを並べた対も、1つの文字として通す。
             private bool String()
             {
                 var start = position;
+                var decoded = new StringBuilder();
                 position++;
                 while (!AtEnd)
                 {
@@ -300,6 +355,10 @@ namespace GRushSdk
                     {
                         position++;
                         Bytes += Encoding.UTF8.GetByteCount(text.Substring(start, position - start));
+                        if (HasLoneSurrogate(decoded.ToString()))
+                        {
+                            LoneSurrogate = true;
+                        }
                         return true;
                     }
                     if (c < 0x20)
@@ -308,18 +367,20 @@ namespace GRushSdk
                     }
                     if (c == '\\')
                     {
-                        if (!Escape())
+                        if (!Escape(decoded))
                         {
                             return false;
                         }
                         continue;
                     }
+                    decoded.Append(c);
                     position++;
                 }
                 return false;
             }
 
-            private bool Escape()
+            // エスケープを1つ読み、表す文字を decoded に足す。
+            private bool Escape(StringBuilder decoded)
             {
                 position++;
                 if (AtEnd)
@@ -328,21 +389,44 @@ namespace GRushSdk
                 }
                 var c = text[position];
                 position++;
-                if ("\"\\/bfnrt".IndexOf(c) >= 0)
+                switch (c)
                 {
-                    return true;
+                    case '"':
+                    case '\\':
+                    case '/':
+                        decoded.Append(c);
+                        return true;
+                    case 'b':
+                        decoded.Append('\b');
+                        return true;
+                    case 'f':
+                        decoded.Append('\f');
+                        return true;
+                    case 'n':
+                        decoded.Append('\n');
+                        return true;
+                    case 'r':
+                        decoded.Append('\r');
+                        return true;
+                    case 't':
+                        decoded.Append('\t');
+                        return true;
                 }
                 if (c != 'u' || position + 4 > text.Length)
                 {
                     return false;
                 }
+                var code = 0;
                 for (var i = 0; i < 4; i++)
                 {
-                    if (!IsHex(text[position + i]))
+                    var digit = HexValue(text[position + i]);
+                    if (digit < 0)
                     {
                         return false;
                     }
+                    code = code * 16 + digit;
                 }
+                decoded.Append((char)code);
                 position += 4;
                 return true;
             }
@@ -412,9 +496,22 @@ namespace GRushSdk
                 Bytes += length;
             }
 
-            private static bool IsHex(char c)
+            // 16 進の1桁の値。16 進の数字でなければ -1。
+            private static int HexValue(char c)
             {
-                return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+                if (c >= '0' && c <= '9')
+                {
+                    return c - '0';
+                }
+                if (c >= 'a' && c <= 'f')
+                {
+                    return c - 'a' + 10;
+                }
+                if (c >= 'A' && c <= 'F')
+                {
+                    return c - 'A' + 10;
+                }
+                return -1;
             }
         }
     }

@@ -283,6 +283,8 @@ namespace GRushSdk
 
         // 改行と制御文字を空白にしてから前後を詰める。GameRush が保存するタイトルと同じ形にする。
         // 長さは GameRush と同じく UTF-16 の単位で測るので、string.Length をそのまま使える。
+        // GameRush と同じく、対になっていないサロゲートを先に除く。除いた切れ端の両側の制御文字は、
+        // 1つの空白にまとまる。
         private static string CollapseTitle(string title)
         {
             if (title == null)
@@ -291,8 +293,20 @@ namespace GRushSdk
             }
             var builder = new StringBuilder(title.Length);
             var inRun = false;
-            foreach (var c in title)
+            for (var index = 0; index < title.Length; index++)
             {
+                var c = title[index];
+                if (char.IsSurrogate(c))
+                {
+                    if (!char.IsSurrogatePair(title, index))
+                    {
+                        continue;
+                    }
+                    inRun = false;
+                    builder.Append(c).Append(title[index + 1]);
+                    index++;
+                    continue;
+                }
                 var breaking =
                     char.IsControl(c)
                     || c == '\u2028'
