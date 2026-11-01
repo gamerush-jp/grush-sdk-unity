@@ -219,11 +219,11 @@ namespace GRushSdk
 
         private GRushRpcResponse Handle(string method, string paramsJson)
         {
-            // WebGL のビルドと同じく、params は JavaScript に届いた形（生の対になっていないサロゲートが U+FFFD に
-            // 替わった形）で読む。GameRush の WebGL の橋渡しは、どのメソッドでも params を先に JSON として読み、
-            // 読めなければ何よりも先に InvalidParams で返す。payload や metadata は作者が組み立てた生の JSON を
-            // そのまま params に載せるので、それが壊れていると params ごと読めない。
-            paramsJson = GRushMockPlayerStatePayload.AsDelivered(paramsJson);
+            // WebGL のバックエンドが JavaScript へ渡すのと同じ形（対になっていないサロゲートを U+FFFD に替えた形）で
+            // 読む。GameRush の WebGL の橋渡しは、どのメソッドでも params を先に JSON として読み、読めなければ
+            // 何よりも先に InvalidParams で返す。payload や metadata は作者が組み立てた生の JSON をそのまま params に
+            // 載せるので、それが壊れていると params ごと読めない。
+            paramsJson = GRushTransportText.ReplaceLoneSurrogates(paramsJson);
             var paramsError = GRushMockPlayerStatePayload.ParamsError(paramsJson);
             if (paramsError != null)
             {

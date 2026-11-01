@@ -106,7 +106,11 @@ namespace GRushSdk
             {
                 Pending[requestId] = onDone;
             }
-            GRushJsCall(requestId, method, paramsJson ?? string.Empty);
+            GRushJsCall(
+                requestId,
+                method,
+                GRushTransportText.ReplaceLoneSurrogates(paramsJson ?? string.Empty)
+            );
         }
 
         public void Share(string paramsJson, byte[] image, Action<GRushRpcResponse> onDone)
@@ -119,7 +123,7 @@ namespace GRushSdk
             }
             GRushJsShare(
                 requestId,
-                paramsJson ?? string.Empty,
+                GRushTransportText.ReplaceLoneSurrogates(paramsJson ?? string.Empty),
                 image,
                 image == null ? 0 : image.Length
             );

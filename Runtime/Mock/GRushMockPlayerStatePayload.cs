@@ -151,55 +151,6 @@ namespace GRushSdk
         }
 
         /// <summary>
-        /// WebGL のビルドで params が JavaScript に届いたときの形。C# の文字列は UTF-8 にして JavaScript へ渡され、
-        /// 生の（エスケープで書いていない）対になっていないサロゲートは、届くと U+FFFD になる。上位の切れ端は
-        /// 次の1文字を巻き込んで1つの U+FFFD になり、下位の切れ端は1つの U+FFFD になる。上位の切れ端が文字列の
-        /// 最後にあると閉じる引用符が消え、params は JSON として読めなくなる。JSON の文字列のエスケープ
-        /// （<c>\ud83d</c> と書いたもの）は ASCII なのでそのまま届き、切れ端として GameRush に断られる。
-        /// Unity 6000.3 の WebGL のビルドを Chromium で動かして確かめた。
-        /// </summary>
-        internal static string AsDelivered(string paramsJson)
-        {
-            if (paramsJson == null)
-            {
-                return null;
-            }
-            StringBuilder builder = null;
-            for (var index = 0; index < paramsJson.Length; index++)
-            {
-                var c = paramsJson[index];
-                if (!char.IsSurrogate(c))
-                {
-                    if (builder != null)
-                    {
-                        builder.Append(c);
-                    }
-                    continue;
-                }
-                if (char.IsSurrogatePair(paramsJson, index))
-                {
-                    if (builder != null)
-                    {
-                        builder.Append(c).Append(paramsJson[index + 1]);
-                    }
-                    index++;
-                    continue;
-                }
-                if (builder == null)
-                {
-                    builder = new StringBuilder(paramsJson.Length);
-                    builder.Append(paramsJson, 0, index);
-                }
-                builder.Append((char)0xFFFD);
-                if (char.IsHighSurrogate(c))
-                {
-                    index++;
-                }
-            }
-            return builder == null ? paramsJson : builder.ToString();
-        }
-
-        /// <summary>
         /// params の生の JSON が1つの JSON の値として読めるか。GameRush の WebGL の橋渡しと同じく、
         /// 空は params が無いものとして通す。読めなければ <see cref="NotJsonParamsMessage"/>、読めれば null を返す。
         /// </summary>
