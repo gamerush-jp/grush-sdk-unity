@@ -5,9 +5,10 @@ namespace GRushSdk
 {
     /// <summary>
     /// モックの <c>playerState.setMine</c> が payload を検査する。サーバと同じく、
-    /// JSON オブジェクトであること、配列とオブジェクトの入れ子が 3000 段以下であること、
+    /// JSON オブジェクトであること、値の数が 50 万以下であること、配列とオブジェクトの入れ子が 3000 段以下であること、
     /// キーと文字列に対になっていないサロゲートが無いこと、空白を除いた JSON の UTF-8 の
     /// バイト数が 4KB 以下であることを、この順に求める。
+    /// <c>leaderboard.submit</c> の metadata と operationId も、同じ読み方で確かめる。
     /// </summary>
     internal static class GRushMockPlayerStatePayload
     {
@@ -25,8 +26,21 @@ namespace GRushSdk
             "Player state payload must not contain lone surrogates.";
         public const string TooLargeMessage = "Player state payload is too large.";
 
-        // GameRush は辿る値の数にも上限を置くが、ここでは数えない。payload は JSON の文字列で来るので
-        // 値の数は文字数を超えず、その上限に届く payload は 4KB を大きく超えて、同じ InvalidParams で弾かれる。
+        public const int OperationIdMaxLength = 100;
+        public const string NotJsonParamsMessage = "Params were not JSON.";
+        public const string MetadataTooDeepMessage = "Metadata is nested too deeply.";
+        public const string MetadataLoneSurrogateMessage =
+            "Metadata must not contain lone surrogates.";
+        public const string OperationIdLoneSurrogateMessage =
+            "Operation ID must not contain lone surrogates.";
+
+        /// <summary>
+        /// サーバが値を辿る数の上限。スカラーも1つと数える。超えた値は JSON でないとして断られる。
+        /// </summary>
+        public const int MaxValues = 500000;
+
+        public const string NotJsonMessage = "Player state payload must be JSON.";
+        public const string MetadataNotJsonMessage = "Metadata must be JSON.";
 
         /// <summary>通るなら null、弾くならエラーの文言を返す。</summary>
         public static string Validate(string payloadJson)
@@ -35,6 +49,10 @@ namespace GRushSdk
             if (scanner == null)
             {
                 return NotObjectMessage;
+            }
+            if (scanner.Values > MaxValues)
+            {
+                return NotJsonMessage;
             }
             if (scanner.Deepest > MaxDepth)
             {
@@ -85,18 +103,64 @@ namespace GRushSdk
         // 1つの JSON オブジェクトとして読めたら、読み終えた Scanner を返す。読めなければ null。
         private static Scanner ScanObject(string json)
         {
+            return ScanValue(json, true);
+        }
+
+        // 1つの JSON の値として読めたら、読み終えた Scanner を返す。読めなければ null。
+        // objectOnly なら、最上位がオブジェクトのときだけ読む。
+        private static Scanner ScanValue(string json, bool objectOnly)
+        {
             if (json == null)
             {
                 return null;
             }
             var scanner = new Scanner(json);
             scanner.SkipWhitespace();
-            if (scanner.Peek() != '{' || !scanner.Document())
+            if ((objectOnly && scanner.Peek() != '{') || !scanner.Document())
             {
                 return null;
             }
             scanner.SkipWhitespace();
             return scanner.AtEnd ? scanner : null;
+        }
+
+        /// <summary>
+        /// モックの <c>leaderboard.submit</c> が、metadata の生の JSON（どの JSON の値でもよい）を
+        /// サーバと同じく確かめる。値の数が <see cref="MaxValues"/> を超えるもの、入れ子が
+        /// <see cref="MaxDepth"/> 段を超えるもの、キーか文字列に対になっていないサロゲートを含むものを、
+        /// この順に断る。JSON として読めないものは null を返さず、
+        /// <see cref="NotJsonParamsMessage"/> を返す（GameRush では params ごと JSON として読めない）。
+        /// 通るなら null、断るならエラーの文言を返す。
+        /// </summary>
+        internal static string MetadataError(string metadataJson)
+        {
+            var scanner = ScanValue(metadataJson, false);
+            if (scanner == null)
+            {
+                return NotJsonParamsMessage;
+            }
+            if (scanner.Values > MaxValues)
+            {
+                return MetadataNotJsonMessage;
+            }
+            if (scanner.Deepest > MaxDepth)
+            {
+                return MetadataTooDeepMessage;
+            }
+            return scanner.LoneSurrogate ? MetadataLoneSurrogateMessage : null;
+        }
+
+        /// <summary>
+        /// サーバと同じく、空と 100 文字（UTF-16 の単位）を超える operationId は無視し、使う値に
+        /// 対になっていないサロゲートがあれば断る。通るなら null、断るならエラーの文言を返す。
+        /// </summary>
+        internal static string OperationIdError(string operationId)
+        {
+            if (string.IsNullOrEmpty(operationId) || operationId.Length > OperationIdMaxLength)
+            {
+                return null;
+            }
+            return HasLoneSurrogate(operationId) ? OperationIdLoneSurrogateMessage : null;
         }
 
         /// <summary>
@@ -212,6 +276,9 @@ namespace GRushSdk
             // 読んだ中で最も深い入れ子の段数。
             public int Deepest;
 
+            // 読んだ値の数。配列とオブジェクトも、スカラーも1つと数える。
+            public long Values;
+
             // キーか文字列の値に、エスケープを解いた後で対になっていないサロゲートがあったか。
             public bool LoneSurrogate;
 
@@ -255,6 +322,7 @@ namespace GRushSdk
                     if (c == '{' || c == '[')
                     {
                         Deepest = System.Math.Max(Deepest, closers.Count + 1);
+                        Values++;
                         var close = c == '{' ? '}' : ']';
                         Take(1);
                         SkipWhitespace();
@@ -275,6 +343,10 @@ namespace GRushSdk
                     else if (!Scalar(c))
                     {
                         return false;
+                    }
+                    else
+                    {
+                        Values++;
                     }
 
                     // 値を1つ読み終えた。閉じられる入れ子を閉じ、次の要素へ進む。

@@ -359,6 +359,34 @@ namespace GRushSdk
 
         private GRushRpcResponse SubmitScore(string paramsJson)
         {
+            string metadataJson = null;
+            string operationId = null;
+            var members = GRushMockJson.Members(paramsJson);
+            if (members != null)
+            {
+                string raw;
+                if (members.TryGetValue("metadata", out raw) && !GRushMockJson.IsNull(raw))
+                {
+                    metadataJson = raw;
+                }
+                if (members.TryGetValue("operationId", out raw))
+                {
+                    GRushMockJson.TryString(raw, out operationId);
+                }
+            }
+            // metadata は作者が組み立てた生の JSON をそのまま params に載せる。GameRush では、それが JSON として
+            // 読めなければ params ごと読めず、ほかの何よりも先に InvalidParams になる。
+            if (
+                metadataJson != null
+                && GRushMockPlayerStatePayload.MetadataError(metadataJson)
+                    == GRushMockPlayerStatePayload.NotJsonParamsMessage
+            )
+            {
+                return GRushRpcResponse.Failure(
+                    GRushErrorCode.InvalidParams,
+                    GRushMockPlayerStatePayload.NotJsonParamsMessage
+                );
+            }
             var request = GRushWire.Parse<GRushSubmitParamsWire>(paramsJson);
             if (request == null || string.IsNullOrEmpty(request.key))
             {
@@ -367,7 +395,13 @@ namespace GRushSdk
                     "A leaderboard key is required."
                 );
             }
-            return GRushMockLeaderboards.Submit(request.key, request.value, PseudoId);
+            return GRushMockLeaderboards.Submit(
+                request.key,
+                request.value,
+                metadataJson,
+                operationId,
+                PseudoId
+            );
         }
 
         private static GRushRpcResponse PageForQuery(string paramsJson, bool aroundMe)
