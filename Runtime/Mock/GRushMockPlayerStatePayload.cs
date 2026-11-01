@@ -151,6 +151,106 @@ namespace GRushSdk
         }
 
         /// <summary>
+        /// WebGL のビルドで params が JavaScript に届いたときの形。C# の文字列は UTF-8 にして JavaScript へ渡され、
+        /// 生の（エスケープで書いていない）対になっていないサロゲートは、届くと U+FFFD になる。上位の切れ端は
+        /// 次の1文字を巻き込んで1つの U+FFFD になり、下位の切れ端は1つの U+FFFD になる。上位の切れ端が文字列の
+        /// 最後にあると閉じる引用符が消え、params は JSON として読めなくなる。JSON の文字列のエスケープ
+        /// （<c>\ud83d</c> と書いたもの）は ASCII なのでそのまま届き、切れ端として GameRush に断られる。
+        /// Unity 6000.3 の WebGL のビルドを Chromium で動かして確かめた。
+        /// </summary>
+        internal static string AsDelivered(string paramsJson)
+        {
+            if (paramsJson == null)
+            {
+                return null;
+            }
+            StringBuilder builder = null;
+            for (var index = 0; index < paramsJson.Length; index++)
+            {
+                var c = paramsJson[index];
+                if (!char.IsSurrogate(c))
+                {
+                    if (builder != null)
+                    {
+                        builder.Append(c);
+                    }
+                    continue;
+                }
+                if (char.IsSurrogatePair(paramsJson, index))
+                {
+                    if (builder != null)
+                    {
+                        builder.Append(c).Append(paramsJson[index + 1]);
+                    }
+                    index++;
+                    continue;
+                }
+                if (builder == null)
+                {
+                    builder = new StringBuilder(paramsJson.Length);
+                    builder.Append(paramsJson, 0, index);
+                }
+                builder.Append((char)0xFFFD);
+                if (char.IsHighSurrogate(c))
+                {
+                    index++;
+                }
+            }
+            return builder == null ? paramsJson : builder.ToString();
+        }
+
+        /// <summary>
+        /// params の生の JSON が1つの JSON の値として読めるか。GameRush の WebGL の橋渡しと同じく、
+        /// 空は params が無いものとして通す。読めなければ <see cref="NotJsonParamsMessage"/>、読めれば null を返す。
+        /// </summary>
+        internal static string ParamsError(string paramsJson)
+        {
+            if (string.IsNullOrEmpty(paramsJson))
+            {
+                return null;
+            }
+            return ScanValue(paramsJson, false) == null ? NotJsonParamsMessage : null;
+        }
+
+        /// <summary>
+        /// モックの <c>leaderboard.submit</c> が、枠を確かめた後・値域を確かめる前に、サーバと同じ順で
+        /// 値・metadata・operationId を確かめる。<paramref name="metadataJson"/> は metadata の生の JSON
+        /// （無ければ null）。通るなら null、断るならエラーの文言を返す。
+        /// </summary>
+        internal static string SubmitInputError(
+            string valueType,
+            double value,
+            string metadataJson,
+            string operationId
+        )
+        {
+            return ScoreError(valueType, value)
+                ?? (metadataJson == null ? null : MetadataError(metadataJson))
+                ?? OperationIdError(operationId);
+        }
+
+        /// <summary>
+        /// サーバと同じく、値が有限の数か、int と duration_ms の枠では整数か、duration_ms の枠では
+        /// 負でないかを確かめる。通るなら null、断るならエラーの文言を返す。
+        /// </summary>
+        internal static string ScoreError(string valueType, double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+            {
+                return "Score must be a finite number.";
+            }
+            if (valueType != "float" && System.Math.Floor(value) != value)
+            {
+                return "Score must be an integer for this leaderboard.";
+            }
+            if (valueType == "duration_ms" && value < 0)
+            {
+                return "Duration must not be negative.";
+            }
+            return null;
+        }
+
+        /// <summary>
         /// サーバと同じく、空と 100 文字（UTF-16 の単位）を超える operationId は無視し、使う値に
         /// 対になっていないサロゲートがあれば断る。通るなら null、断るならエラーの文言を返す。
         /// </summary>

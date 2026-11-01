@@ -330,7 +330,7 @@ namespace GRushSdk
             return builder.Append("]}").ToString();
         }
 
-        // GameRush と同じく、枠を確かめた後に metadata、operationId の順に確かめ、値域はその後に確かめる。
+        // GameRush と同じく、枠を確かめた後に値、metadata、operationId の順に確かめ、値域はその後に確かめる。
         // metadataJson は metadata の生の JSON（無ければ null）。
         internal static GRushRpcResponse Submit(
             string key,
@@ -346,9 +346,12 @@ namespace GRushSdk
             {
                 return unavailable.Value;
             }
-            var inputError =
-                (metadataJson == null ? null : GRushMockPlayerStatePayload.MetadataError(metadataJson))
-                ?? GRushMockPlayerStatePayload.OperationIdError(operationId);
+            var inputError = GRushMockPlayerStatePayload.SubmitInputError(
+                board.ValueType,
+                value,
+                metadataJson,
+                operationId
+            );
             if (inputError != null)
             {
                 return GRushRpcResponse.Failure(GRushErrorCode.InvalidParams, inputError);

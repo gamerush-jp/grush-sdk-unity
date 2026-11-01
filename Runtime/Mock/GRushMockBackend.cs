@@ -219,6 +219,16 @@ namespace GRushSdk
 
         private GRushRpcResponse Handle(string method, string paramsJson)
         {
+            // WebGL のビルドと同じく、params は JavaScript に届いた形（生の対になっていないサロゲートが U+FFFD に
+            // 替わった形）で読む。GameRush の WebGL の橋渡しは、どのメソッドでも params を先に JSON として読み、
+            // 読めなければ何よりも先に InvalidParams で返す。payload や metadata は作者が組み立てた生の JSON を
+            // そのまま params に載せるので、それが壊れていると params ごと読めない。
+            paramsJson = GRushMockPlayerStatePayload.AsDelivered(paramsJson);
+            var paramsError = GRushMockPlayerStatePayload.ParamsError(paramsJson);
+            if (paramsError != null)
+            {
+                return GRushRpcResponse.Failure(GRushErrorCode.InvalidParams, paramsError);
+            }
             switch (method)
             {
                 case "player.getSelf":
@@ -373,19 +383,6 @@ namespace GRushSdk
                 {
                     GRushMockJson.TryString(raw, out operationId);
                 }
-            }
-            // metadata は作者が組み立てた生の JSON をそのまま params に載せる。GameRush では、それが JSON として
-            // 読めなければ params ごと読めず、ほかの何よりも先に InvalidParams になる。
-            if (
-                metadataJson != null
-                && GRushMockPlayerStatePayload.MetadataError(metadataJson)
-                    == GRushMockPlayerStatePayload.NotJsonParamsMessage
-            )
-            {
-                return GRushRpcResponse.Failure(
-                    GRushErrorCode.InvalidParams,
-                    GRushMockPlayerStatePayload.NotJsonParamsMessage
-                );
             }
             var request = GRushWire.Parse<GRushSubmitParamsWire>(paramsJson);
             if (request == null || string.IsNullOrEmpty(request.key))
