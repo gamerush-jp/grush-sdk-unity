@@ -55,6 +55,11 @@ namespace GRushSdk
         /// **集約が sum のランキングで投稿を再送するなら必ず渡すこと** —
         /// 加算は冪等でないため、応答が失われて送り直すと二重に足され、
         /// 集約後の値からは元へ戻せない。再送では同じ値を渡す。
+        ///
+        /// <paramref name="metadataJson"/> と <paramref name="operationId"/> の文字列にそのまま入った、
+        /// 対になっていないサロゲート（UTF-16 の文字列を文字の途中で切った切れ端）は、U+FFFD に替えて送る。
+        /// 切れ端だけが違う値は同じ値になる。<paramref name="metadataJson"/> に JSON のエスケープ
+        /// （<c>\ud83d</c> など）で書いた切れ端はそのまま届き、GameRush が <c>InvalidParams</c> で断る。
         /// </summary>
         public async Task<GRushResult<GRushScoreResult>> SubmitAsync(
             string key,

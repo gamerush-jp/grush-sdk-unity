@@ -108,6 +108,9 @@ namespace GRushSdk
         /// 生文字列（4KB 以下）。<paramref name="baseRevision"/> に 0 以上を渡すと
         /// 楽観ロックになり、他所で更新されていれば <c>InvalidParams</c> で戻る。
         /// rating は今の値のまま変えない。
+        /// 文字列にそのまま入った対になっていないサロゲート（UTF-16 の文字列を文字の途中で切った切れ端）は、
+        /// U+FFFD に替えて送る。切れ端だけが違うキーは同じキーになる。JSON のエスケープ
+        /// （<c>\ud83d</c> など）で書いた切れ端はそのまま届き、GameRush が <c>InvalidParams</c> で断る。
         /// </summary>
         public Task<GRushResult<GRushPlayerStatePage>> SetMineAsync(
             string payloadJson,
@@ -124,6 +127,7 @@ namespace GRushSdk
         /// payload だけを書く。true でも古い GameRush 本体では rating が黙って捨てられるので、
         /// 書けたかは返る状態の <c>HasRating</c> と <c>Rating</c> で確かめる。
         /// NaN と無限大は送らずに InvalidParams で返す。
+        /// payload の対になっていないサロゲートの扱いは、rating を渡さない版と同じ。
         /// </summary>
         public Task<GRushResult<GRushPlayerStatePage>> SetMineAsync(
             string payloadJson,
