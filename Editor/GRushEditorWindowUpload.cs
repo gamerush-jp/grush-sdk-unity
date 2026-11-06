@@ -58,11 +58,25 @@ namespace GRushSdk.Editor
             }
             EditorGUILayout.LabelField(
                 "送るもの",
-                manifest.Files.Count
+                manifest.UploadFileCount
                     + " ファイル / "
-                    + (manifest.TotalBytes / (1024 * 1024))
+                    + (manifest.UploadBytes / (1024 * 1024))
                     + " MB"
             );
+            var canvas = GRushEditorUploader.CanvasSizeFor(manifest);
+            EditorGUILayout.LabelField(
+                "基準解像度",
+                canvas == null ? "指定なし" : canvas.Width + " × " + canvas.Height
+            );
+            if (manifest.UsesDecompressionFallback)
+            {
+                EditorGUILayout.HelpBox(
+                    "このビルドは Decompression Fallback（.unityweb）が有効です。"
+                        + "Publishing Settings で無効にして書き出し直すと、"
+                        + "ダウンロードとコンパイルが並行するので速く読み込まれます。",
+                    MessageType.Warning
+                );
+            }
         }
 
         private void DrawUploadActions()

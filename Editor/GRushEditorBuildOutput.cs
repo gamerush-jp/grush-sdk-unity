@@ -12,6 +12,8 @@ namespace GRushSdk.Editor
             "TemplateData",
             "StreamingAssets",
             "index.html",
+            "ServiceWorker.js",
+            "manifest.webmanifest",
             GRushEditorLeaderboardManifest.FileName,
         };
 

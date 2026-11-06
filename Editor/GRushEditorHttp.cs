@@ -73,20 +73,23 @@ namespace GRushSdk.Editor
 
         public static UnityWebRequest PutFile(
             string url,
-            string filePath,
-            long size,
+            GRushBuildFile file,
             Dictionary<string, string> headers
         )
         {
             var request = new UnityWebRequest(url, "PUT");
             // ファイルはディスクから流して送り、ファイル全体をメモリへ読み込まない。
             // 再試行のたびにこのリクエストを作り直し、ディスクから読み直す。
-            var upload = new UploadHandlerFile(filePath);
+            // ディスクに実体が無いファイルだけ、持っている中身をそのまま送る。
+            UploadHandler upload =
+                file.Content != null
+                    ? (UploadHandler)new UploadHandlerRaw(file.Content)
+                    : new UploadHandlerFile(file.FullPath);
             upload.contentType = "application/octet-stream";
             request.uploadHandler = upload;
             request.disposeUploadHandlerOnDispose = true;
             request.downloadHandler = new DownloadHandlerBuffer();
-            request.timeout = GRushEditorPutPolicy.TimeoutSeconds(size);
+            request.timeout = GRushEditorPutPolicy.TimeoutSeconds(file.Size);
             if (headers != null)
             {
                 foreach (var header in headers)

@@ -3,15 +3,14 @@ using System.Collections.Generic;
 namespace GRushSdk.Editor
 {
     /// <summary>
-    /// アップロードできるビルドの規則。**サーバ側の
-    /// <c>packages/shared/src/contracts/upload.ts</c> の写し**で、ずれると
-    /// Editor からのアップロードだけが 400 で落ちる。値を足すときは両方直すこと。
+    /// アップロードできるビルドの規則。GameRush が受け付ける規則に合わせて、送る前に手元で確かめる。
     /// </summary>
     internal static class GRushEditorBuildRules
     {
         public const long MaxBuildBytes = 50L * 1024 * 1024;
         public const int MaxBuildFileCount = 2000;
         public const string GeneratedPlayerConfigPath = "__grush-player.json";
+        public const string BuildCanvasSizePath = "__grush-canvas.json";
         public const string EntryPath = "index.html";
 
         private static readonly HashSet<string> BuildExtensions = new HashSet<string>

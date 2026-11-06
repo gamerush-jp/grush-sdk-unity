@@ -10,6 +10,9 @@ namespace GRushSdk.Editor
         private const long ObjectAlreadyWritten = 412;
         private const long SignatureRejected = 403;
 
+        // ビルドの確定には時間がかかることがあるので、ほかの API より長く待つ。
+        private const int CompleteTimeoutSeconds = 180;
+
         public static IEnumerator Run(
             GRushEditorClient client,
             string gameId,
@@ -19,11 +22,19 @@ namespace GRushSdk.Editor
         {
             state.Reset();
             state.Running = true;
-            state.TotalBytes = manifest.TotalBytes;
+
+            var prepared = manifest.ForGame(gameId, CanvasSizeFor(manifest));
+            if (!prepared.Ok)
+            {
+                Fail(state, prepared.Error);
+                yield break;
+            }
+
+            state.TotalBytes = prepared.TotalBytes;
             state.Phase = "ビルドを作成しています…";
 
             var slot = new GRushHttpSlot();
-            yield return client.Post("/api/games/" + gameId + "/builds", manifest.ToRequestBody(), slot);
+            yield return client.Post("/api/games/" + gameId + "/builds", prepared.ToRequestBody(), slot);
             if (!slot.Result.Ok || slot.Result.Json == null)
             {
                 Fail(
@@ -38,15 +49,28 @@ namespace GRushSdk.Editor
             state.BuildId = slot.Result.Json.Get("build").Get("id").AsString(null);
             state.Pending = GRushEditorUploadTickets.From(
                 slot.Result.Json.Get("uploadUrls"),
-                manifest
+                prepared
             );
             state.NeedsComplete = true;
-            if (string.IsNullOrEmpty(state.BuildId) || state.Pending.Count != manifest.Files.Count)
+            if (string.IsNullOrEmpty(state.BuildId) || state.Pending.Count != prepared.Files.Count)
             {
                 Fail(state, "アップロード先の応答を読めませんでした。Studio でビルドの状態を確認してください。");
                 yield break;
             }
             yield return Resume(client, state);
+        }
+
+        /// <summary>
+        /// 書き出した <c>index.html</c> の canvas の大きさを送る。Player Settings は書き出しの後に
+        /// 変わりうるので、読めないときだけ使う。
+        /// </summary>
+        public static GRushCanvasSize CanvasSizeFor(GRushBuildManifest manifest)
+        {
+            return manifest.CanvasSize
+                ?? GRushCanvasSize.From(
+                    PlayerSettings.defaultWebScreenWidth,
+                    PlayerSettings.defaultWebScreenHeight
+                );
         }
 
         public static IEnumerator Resume(GRushEditorClient client, GRushUploadState state)
@@ -96,8 +120,7 @@ namespace GRushSdk.Editor
                 using (
                     var request = GRushEditorHttp.PutFile(
                         ticket.Url,
-                        ticket.File.FullPath,
-                        ticket.File.Size,
+                        ticket.File,
                         ticket.Headers
                     )
                 )
@@ -155,7 +178,12 @@ namespace GRushSdk.Editor
         {
             state.Phase = "ビルドを確定しています…";
             var slot = new GRushHttpSlot();
-            yield return client.Post("/api/builds/" + state.BuildId + "/complete", "{}", slot);
+            yield return client.Post(
+                "/api/builds/" + state.BuildId + "/complete",
+                "{}",
+                slot,
+                CompleteTimeoutSeconds
+            );
             if (slot.Result.Ok)
             {
                 state.EntryUrl = slot.Result.Json == null

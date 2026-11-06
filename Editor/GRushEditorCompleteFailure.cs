@@ -18,11 +18,10 @@ namespace GRushSdk.Editor
         public const string NoFileManifest = "Build has no file manifest.";
 
         /// <summary>
-        /// サーバはアップロード中のビルドを、次の失敗を返す前に failed にする。届いていない
-        /// ファイルがある 409（<c>details.missing</c> 付き）、中身の検査に落ちた 422、ファイルの
-        /// 一覧の無い 400 がそれに当たり、failed のビルドや片付けられたビルドへの確定は 409 になる。
-        /// どれも同じビルドの確定は失敗し続けるので、新しいビルドから送り直すしかない。
-        /// 409 のうち、ゲームの状態の競合だけは同じビルドでやり直せる。
+        /// 届いていないファイルがある 409（<c>details.missing</c> 付き）、中身の検査に落ちた 422、
+        /// ファイルの一覧の無い 400、失敗したビルドや片付けられたビルドへの 409 は、同じビルドの確定が
+        /// 失敗し続けるので、新しいビルドから送り直す。409 のうち、ゲームの状態の競合だけは同じビルドで
+        /// やり直せる。
         /// </summary>
         public static bool RequiresNewBuild(long status, string error)
         {

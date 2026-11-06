@@ -45,25 +45,35 @@ namespace GRushSdk.Editor
 
         public IEnumerator Get(string path, GRushHttpSlot slot)
         {
-            return Send(path, "GET", null, slot);
+            return Send(path, "GET", null, slot, GRushEditorHttp.JsonTimeoutSeconds);
         }
 
-        public IEnumerator Post(string path, string body, GRushHttpSlot slot)
+        public IEnumerator Post(
+            string path,
+            string body,
+            GRushHttpSlot slot,
+            int timeoutSeconds = GRushEditorHttp.JsonTimeoutSeconds
+        )
         {
-            return Send(path, "POST", body, slot);
+            return Send(path, "POST", body, slot, timeoutSeconds);
         }
 
         public IEnumerator Put(string path, string body, GRushHttpSlot slot)
         {
-            return Send(path, "PUT", body, slot);
+            return Send(path, "PUT", body, slot, GRushEditorHttp.JsonTimeoutSeconds);
         }
 
-        private IEnumerator Send(string path, string method, string body, GRushHttpSlot slot)
+        private IEnumerator Send(
+            string path,
+            string method,
+            string body,
+            GRushHttpSlot slot,
+            int timeoutSeconds
+        )
         {
-            return GRushEditorHttp.Send(
-                GRushEditorHttp.Json(Origin + path, method, body, token),
-                slot
-            );
+            var request = GRushEditorHttp.Json(Origin + path, method, body, token);
+            request.timeout = timeoutSeconds;
+            return GRushEditorHttp.Send(request, slot);
         }
     }
 }

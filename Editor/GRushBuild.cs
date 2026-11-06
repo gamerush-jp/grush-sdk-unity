@@ -146,10 +146,13 @@ namespace GRushSdk.Editor
             }
             var outcome = Finish(
                 GRushBuildOutcome.Succeeded,
-                "ビルドしました: " + manifest.Files.Count + " ファイル / " + Megabytes(manifest.TotalBytes),
+                "ビルドしました: "
+                    + manifest.UploadFileCount
+                    + " ファイル / "
+                    + Megabytes(manifest.UploadBytes),
                 resolved,
                 changes,
-                manifest.TotalBytes
+                manifest.UploadBytes
             );
             if (outcome.OverGuideline)
             {
