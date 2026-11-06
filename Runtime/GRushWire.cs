@@ -266,6 +266,7 @@ namespace GRushSdk
     {
         public string mode;
         public string roomCode;
+        public int targetRoomSize;
     }
 
     internal static class GRushWire
@@ -292,13 +293,17 @@ namespace GRushSdk
             return builder.Append('"').ToString();
         }
 
-        public static string JoinParams(string mode, string roomCode)
+        public static string JoinParams(string mode, string roomCode, int targetRoomSize)
         {
             var builder = new StringBuilder("{");
             builder.Append("\"mode\":").Append(Escape(string.IsNullOrEmpty(mode) ? "default" : mode));
             if (!string.IsNullOrEmpty(roomCode))
             {
                 builder.Append(",\"roomCode\":").Append(Escape(roomCode));
+            }
+            if (targetRoomSize != 0)
+            {
+                builder.Append(",\"targetRoomSize\":").Append(targetRoomSize);
             }
             return builder.Append('}').ToString();
         }

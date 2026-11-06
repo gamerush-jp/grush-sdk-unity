@@ -124,7 +124,7 @@ namespace GRushSdk
             {
                 return GRushResult<bool>.Failure(GRushErrorCode.InvalidParams, "Payload is invalid.");
             }
-            GRushMockHub.Instance.Route(Index, payload, payload.Length, channel, to);
+            GRushMockHub.Instance.RouteFromPeer(this, payload, channel, to);
             return GRushResult<bool>.Success(true);
         }
 

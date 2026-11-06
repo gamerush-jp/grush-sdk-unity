@@ -7,7 +7,7 @@ GameRush の GameAPI を Unity から呼ぶための UPM パッケージ。ビ�
 Package Manager の `Add package from git URL...` に次を入れる。
 
 ```text
-https://github.com/gamerush-jp/grush-sdk-unity.git#v1.12.1
+https://github.com/gamerush-jp/grush-sdk-unity.git#v1.13.0
 ```
 
 Unity 2021.3 以降。ビルドターゲットは WebGL。
@@ -224,7 +224,9 @@ opponent.Received += message => opponent.Send(reply, GRushChannel.Unreliable, GR
 
 `GRushMock.AddPeer` で作った相手は同じプロセス内の2人目の peer として部屋に入り、送受信が実際に往復する。部屋が8人で埋まっていれば `null` を返す。
 
-モックの `GRush.Net.JoinAsync` は GameRush と同じく、`mode`（英数字と `._:-` の1〜32文字）か `roomCode`（英数字の4〜12文字）の形が違えば `InvalidParams` で失敗する。部屋が埋まっていれば `Unavailable` で失敗する。
+モックの `GRush.Net.JoinAsync` は GameRush と同じく、`mode`（英数字と `._:-` の1〜32文字）か `roomCode`（英数字の4〜12文字）の形が違うか、`targetRoomSize` が 0（未指定）でも 1〜8 でもなければ `InvalidParams` で失敗する。部屋が埋まっていれば `Unavailable` で失敗する。
+
+モックの部屋は1つなので、`JoinAsync(mode, targetRoomSize)` は次のように働く。今の部屋の人数が `targetRoomSize` 以上なら、`GRushMock.AddPeer` で作った相手を外して `MOCKROOM2`、`MOCKROOM3` … の新しい部屋で始める。それより少なければ今の部屋へ入る。外された相手の `Send` はどこへも届かない。部屋数の上限は無いので、GameRush で新しい部屋を作れないときの振り分けは再現しない。
 
 `GRushMock.RaiseRoomError(code, message)` は、自分がいる部屋に `GRushRoom.Error` を届ける（次のフレーム以降に届き、部屋は閉じない）。部屋にいなければ `false` を返す。
 

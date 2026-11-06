@@ -22,6 +22,7 @@ namespace GRushSdk
         private readonly Dictionary<int, uint> outgoingSeq = new Dictionary<int, uint>();
         private readonly Random random = new Random(20260816);
         private string roomCode;
+        private int roomSerial = 1;
 
         public static GRushMockHub Instance
         {
@@ -43,12 +44,21 @@ namespace GRushSdk
         public GRushJoinWire Join(
             string mode,
             string requestedCode,
+            int targetRoomSize,
             string pseudoId,
             string displayName,
             string avatarUrl,
             Action<GRushNetEvent> deliver
         )
         {
+            if (
+                string.IsNullOrEmpty(requestedCode)
+                && targetRoomSize > 0
+                && members.Count >= Math.Min(targetRoomSize, GRushMockLimits.MaxPeers)
+            )
+            {
+                StartNextRoom();
+            }
             var index = NextFreeIndex();
             if (index < 0)
             {
@@ -167,6 +177,15 @@ namespace GRushSdk
             return delivered;
         }
 
+        /// <summary>部屋に残っている相手の送信だけを通す。外された相手は前の部屋に残った扱いになる。</summary>
+        public void RouteFromPeer(GRushMockPeer peer, byte[] payload, GRushChannel channel, int to)
+        {
+            if (members.Exists(candidate => candidate.Peer == peer))
+            {
+                Route(peer.Index, payload, payload.Length, channel, to);
+            }
+        }
+
         public void Route(int from, byte[] payload, int count, GRushChannel channel, int to)
         {
             if (channel == GRushChannel.Unreliable && random.NextDouble() < GRushMock.UnreliableDropRate)
@@ -248,6 +267,16 @@ namespace GRushSdk
                         )
                 );
             }
+        }
+
+        // モックの部屋は1つなので、部屋が目安に届いていれば、どの部屋も目安以上だったことにする。
+        // ゲームは新しい部屋へ移り、AddPeer で作った相手は前の部屋に残る。
+        private void StartNextRoom()
+        {
+            members.Clear();
+            outgoingSeq.Clear();
+            roomSerial += 1;
+            roomCode = "MOCKROOM" + roomSerial;
         }
 
         private int NextFreeIndex()

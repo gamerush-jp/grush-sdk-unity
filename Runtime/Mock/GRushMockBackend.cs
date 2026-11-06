@@ -451,7 +451,8 @@ namespace GRushSdk
             var request = GRushWire.Parse<GRushJoinParamsWire>(paramsJson);
             var mode = request == null ? null : request.mode;
             var roomCode = request == null ? null : request.roomCode;
-            var error = GRushMockNetParams.Validate(mode, roomCode);
+            var targetRoomSize = request == null ? 0 : request.targetRoomSize;
+            var error = GRushMockNetParams.Validate(mode, roomCode, targetRoomSize);
             if (error != null)
             {
                 return GRushRpcResponse.Failure(GRushErrorCode.InvalidParams, error);
@@ -459,6 +460,7 @@ namespace GRushSdk
             var wire = GRushMockHub.Instance.Join(
                 GRushMockNetParams.NormalizeMode(mode),
                 GRushMockNetParams.NormalizeRoomCode(roomCode),
+                targetRoomSize,
                 PseudoId,
                 Consented ? GRushMock.DisplayName : null,
                 Consented ? GRushMock.AvatarUrl : null,
