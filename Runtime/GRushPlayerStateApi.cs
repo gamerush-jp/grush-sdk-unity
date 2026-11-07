@@ -142,6 +142,7 @@ namespace GRushSdk
         /// 相手探し。同じゲームの他プレイヤーの公開状態をランダムに返す（既定 10 件）。
         /// 自分と運営が伏せた状態は返らず、名前も返らない。
         /// <see cref="GRush.IsMatchmakingAvailable"/> が false なら Unsupported。
+        /// <see cref="PreviewReceived"/> を購読していないと、GameRush は他プレイヤーの状態を PreviewRequired で断ることがある。
         /// </summary>
         public Task<GRushResult<GRushPlayerStatePage>> SampleAsync()
         {
@@ -226,6 +227,7 @@ namespace GRushSdk
         /// <summary>
         /// 他プレイヤーの状態を疑似IDで引く（1回 50 件まで）。
         /// **運営が伏せたものは返らないので、要求した数だけ返る前提で書かないこと。**
+        /// <see cref="PreviewReceived"/> を購読していないと、GameRush は他プレイヤーの状態を PreviewRequired で断ることがある。
         /// </summary>
         public async Task<GRushResult<GRushPlayerStatePage>> GetAsync(string[] pseudoIds)
         {

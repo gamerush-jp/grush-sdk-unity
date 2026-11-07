@@ -11,6 +11,10 @@ namespace GRushSdk
         ConsentDeclined,
         InvalidParams,
         Internal,
+        /// <summary>
+        /// 確認用の表示（<c>GRush.PlayerState.PreviewReceived</c>）を購読していないので、他のプレイヤーの公開プレイヤー状態を読めない。
+        /// </summary>
+        PreviewRequired,
     }
 
     public readonly struct GRushResult<T>
@@ -64,6 +68,8 @@ namespace GRushSdk
                     return GRushErrorCode.ConsentDeclined;
                 case "invalidParams":
                     return GRushErrorCode.InvalidParams;
+                case "previewRequired":
+                    return GRushErrorCode.PreviewRequired;
                 default:
                     return GRushErrorCode.Internal;
             }
