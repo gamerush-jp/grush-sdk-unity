@@ -257,9 +257,13 @@ namespace GRushSdk
             return true;
         }
 
-        private static bool IsKey(string key)
+        /// <summary>
+        /// ランキングの key の書式。GameRush と同じく「.」と「..」も拒む。API の URL のパスに入ると、
+        /// 正規化で別の経路を指すため。
+        /// </summary>
+        internal static bool IsKey(string key)
         {
-            if (string.IsNullOrEmpty(key) || key.Length > MaxKeyLength)
+            if (string.IsNullOrEmpty(key) || key.Length > MaxKeyLength || key == "." || key == "..")
             {
                 return false;
             }

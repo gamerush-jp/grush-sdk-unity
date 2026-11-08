@@ -385,11 +385,11 @@ namespace GRushSdk
                 }
             }
             var request = GRushWire.Parse<GRushSubmitParamsWire>(paramsJson);
-            if (request == null || string.IsNullOrEmpty(request.key))
+            if (request == null || !GRushMockManifest.IsKey(request.key))
             {
                 return GRushRpcResponse.Failure(
                     GRushErrorCode.InvalidParams,
-                    "A leaderboard key is required."
+                    "Invalid leaderboard key."
                 );
             }
             return GRushMockLeaderboards.Submit(
@@ -404,11 +404,11 @@ namespace GRushSdk
         private static GRushRpcResponse PageForQuery(string paramsJson, bool aroundMe)
         {
             var query = GRushWire.Parse<GRushLeaderboardQueryWire>(paramsJson);
-            if (query == null || string.IsNullOrEmpty(query.key))
+            if (query == null || !GRushMockManifest.IsKey(query.key))
             {
                 return GRushRpcResponse.Failure(
                     GRushErrorCode.InvalidParams,
-                    "A leaderboard key is required."
+                    "Invalid leaderboard key."
                 );
             }
             return GRushMockLeaderboards.Page(

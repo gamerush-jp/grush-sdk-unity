@@ -157,20 +157,29 @@ namespace GRushSdk.Editor
 
             Section("新しいゲームを作る");
             newGameTitle = EditorGUILayout.TextField("タイトル", newGameTitle);
-            newGameDescription = EditorGUILayout.TextField("説明", newGameDescription);
-            EditorGUILayout.LabelField("遊び方");
-            if (howToPlayStyle == null)
+            if (introductionStyle == null)
             {
-                howToPlayStyle = new GUIStyle(EditorStyles.textArea) { wordWrap = true };
+                introductionStyle = new GUIStyle(EditorStyles.textArea) { wordWrap = true };
             }
-            newGameHowToPlay = EditorGUILayout.TextArea(
-                newGameHowToPlay,
-                howToPlayStyle,
+            EditorGUILayout.LabelField("説明");
+            newGameDescription = EditorGUILayout.TextArea(
+                newGameDescription,
+                introductionStyle,
                 GUILayout.MinHeight(54)
             );
-            EditorGUILayout.HelpBox(
-                "操作方法・ゲームの目的・攻略のコツなどを書いてください。最大 2000 字。ゲーム詳細にそのまま表示されます。",
-                MessageType.None
+            DrawIntroductionLength(
+                newGameDescription,
+                "どんなゲームか・見どころを書いてください。"
+            );
+            EditorGUILayout.LabelField("遊び方");
+            newGameHowToPlay = EditorGUILayout.TextArea(
+                newGameHowToPlay,
+                introductionStyle,
+                GUILayout.MinHeight(54)
+            );
+            DrawIntroductionLength(
+                newGameHowToPlay,
+                "操作方法・ゲームの目的・攻略のコツなどを書いてください。"
             );
             newGameVisibility = EditorGUILayout.Popup(
                 "公開設定",
@@ -196,6 +205,8 @@ namespace GRushSdk.Editor
             // 全年齢向けの申告は、非公開で作るときだけ GameRush が求めない。
             var ready =
                 newGameTitle.Trim().Length > 0
+                && GRushEditorIntroduction.IsLongEnough(newGameDescription)
+                && GRushEditorIntroduction.IsLongEnough(newGameHowToPlay)
                 && newGameConfirmRights
                 && (VisibilityValues[newGameVisibility] == "private" || newGameDeclareAllAges);
             using (new EditorGUI.DisabledScope(busy || !ready))
@@ -205,6 +216,26 @@ namespace GRushSdk.Editor
                     Run(CreateGameRoutine());
                 }
             }
+        }
+
+        // 下限に届くまでは作成のボタンを押せないので、何が足りないかを欄の下に出す。
+        private static void DrawIntroductionLength(string value, string hint)
+        {
+            var length = GRushEditorIntroduction.Length(value);
+            var enough = length >= GRushEditorIntroduction.MinLength;
+            EditorGUILayout.HelpBox(
+                hint
+                    + GRushEditorIntroduction.MinLength
+                    + "〜"
+                    + GRushEditorIntroduction.MaxLength
+                    + " 文字。ゲーム詳細にそのまま表示されます。今 "
+                    + length
+                    + " 文字"
+                    + (enough
+                        ? "。"
+                        : "（あと " + (GRushEditorIntroduction.MinLength - length) + " 文字）。"),
+                enough ? MessageType.None : MessageType.Warning
+            );
         }
 
         private void DrawMessages()

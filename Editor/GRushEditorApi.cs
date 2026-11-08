@@ -133,6 +133,18 @@ namespace GRushSdk.Editor
                 );
                 yield break;
             }
+            // 手元の数え方とずれて GameRush が下限で断ったときも、どの欄が足りないかを日本語で返す。
+            if (!slot.Result.Ok && (errorCode == "description.tooShort" || errorCode == "howToPlay.tooShort"))
+            {
+                onError(
+                    "ゲームを作れませんでした。"
+                        + (errorCode == "description.tooShort" ? "説明" : "遊び方")
+                        + "は、改行と前後の空白を除いて "
+                        + GRushEditorIntroduction.MinLength
+                        + " 文字以上にしてください。"
+                );
+                yield break;
+            }
             if (!slot.Result.Ok && errorCode == "ageRating.declarationRequired")
             {
                 onError(
