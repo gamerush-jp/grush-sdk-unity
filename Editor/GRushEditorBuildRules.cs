@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 
 namespace GRushSdk.Editor
 {
@@ -12,6 +13,11 @@ namespace GRushSdk.Editor
         public const string GeneratedPlayerConfigPath = "__grush-player.json";
         public const string BuildCanvasSizePath = "__grush-canvas.json";
         public const string EntryPath = "index.html";
+
+        /// <summary>
+        /// 1つのパスの UTF-8 のバイト数の上限。超えるパスは保存先のキーの長さを超えて置けない。
+        /// </summary>
+        public const int MaxBuildPathBytes = 512;
 
         private static readonly HashSet<string> BuildExtensions = new HashSet<string>
         {
@@ -137,12 +143,35 @@ namespace GRushSdk.Editor
                     return normalized + ": 使えないパスです。";
                 }
             }
+            if (HasUnservableCharacter(normalized))
+            {
+                return normalized + ": パスに使えない文字（制御文字・? # % < > : など）があります。";
+            }
+            if (Encoding.UTF8.GetByteCount(normalized) > MaxBuildPathBytes)
+            {
+                return normalized + ": パスが長すぎます（UTF-8 で " + MaxBuildPathBytes + " バイトまで）。";
+            }
             var extension = ExtensionForPath(normalized);
             if (extension == null || !BuildExtensions.Contains(extension))
             {
                 return normalized + ": この拡張子はアップロードできません。";
             }
             return null;
+        }
+
+        // ? と # は URL のパスを切り、% は配信で復号されて別のファイルを指し、制御文字は URL の解決で消えるので、
+        // 置けても配信で見つからない。< > : U+2028 U+2029 は正当な用途が無いので合わせて断る。
+        private static bool HasUnservableCharacter(string path)
+        {
+            foreach (var c in path)
+            {
+                if (c < 0x20 || (c >= 0x7f && c <= 0x9f) || c == '\u2028' || c == '\u2029'
+                    || c == '?' || c == '#' || c == '%' || c == '<' || c == '>' || c == ':')
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }
