@@ -403,8 +403,11 @@ namespace GRushSdk
         public GRushShopProduct[] Products;
     }
 
+    /// <summary>購入の結果。知らない値は <see cref="Unknown"/> になる。</summary>
     public enum GRushShopPurchaseStatus
     {
+        Unknown,
+
         /// <summary>決済画面へ移る。ページはすぐ離れる。</summary>
         Redirecting,
 
@@ -413,6 +416,15 @@ namespace GRushSdk
 
         /// <summary>もう持っている。</summary>
         AlreadyOwned,
+    }
+
+    [Serializable]
+    public struct GRushShopPurchaseResult
+    {
+        public GRushShopPurchaseStatus Status;
+
+        /// <summary>GameRush が返した status の文字列（<c>"redirecting"</c> など）。Unknown のときに中身を見る。</summary>
+        public string RawStatus;
     }
 
     /// <summary>

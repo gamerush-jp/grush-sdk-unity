@@ -23,10 +23,12 @@ var GRushBridgeLibrary = {
       return GRushBridge.api("GRushShop") || GRushBridge.api("GameRushShop");
     },
 
+    // Products that cannot be bought here are never shown, even if the runtime lists them.
     shopCatalog: function (value) {
+      var enabled = !!(value && value.enabled === true);
       return {
-        enabled: !!(value && value.enabled === true),
-        products: Array.isArray(value && value.products) ? value.products : [],
+        enabled: enabled,
+        products: enabled && Array.isArray(value.products) ? value.products : [],
       };
     },
 

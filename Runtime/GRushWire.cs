@@ -790,22 +790,18 @@ namespace GRushSdk
             };
         }
 
-        public static bool TryShopPurchaseStatus(string status, out GRushShopPurchaseStatus value)
+        public static GRushShopPurchaseStatus ShopPurchaseStatusOf(string status)
         {
             switch (status)
             {
                 case "redirecting":
-                    value = GRushShopPurchaseStatus.Redirecting;
-                    return true;
+                    return GRushShopPurchaseStatus.Redirecting;
                 case "cancelled":
-                    value = GRushShopPurchaseStatus.Cancelled;
-                    return true;
+                    return GRushShopPurchaseStatus.Cancelled;
                 case "alreadyOwned":
-                    value = GRushShopPurchaseStatus.AlreadyOwned;
-                    return true;
+                    return GRushShopPurchaseStatus.AlreadyOwned;
                 default:
-                    value = GRushShopPurchaseStatus.Cancelled;
-                    return false;
+                    return GRushShopPurchaseStatus.Unknown;
             }
         }
 
@@ -836,7 +832,8 @@ namespace GRushSdk
             var grants = new List<GRushShopGrant>(source.Length);
             foreach (var wire in source)
             {
-                if (wire != null && !string.IsNullOrEmpty(wire.id))
+                // sku の無い付与はゲームが反映できないので捨てる。
+                if (wire != null && !string.IsNullOrEmpty(wire.id) && !string.IsNullOrEmpty(wire.sku))
                 {
                     grants.Add(
                         new GRushShopGrant

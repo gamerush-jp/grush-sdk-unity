@@ -166,12 +166,23 @@ namespace GRushSdk
             {
                 return Invalid("No product for that sku.");
             }
+            if (!GRushMock.SignedIn)
+            {
+                return GRushRpcResponse.Failure(GRushErrorCode.SignInRequired, "Purchases require sign-in.");
+            }
+            // Ack 済みを含め、付与済みの sku は買えない。
+            if (grants.Exists(grant => grant.Sku == sku))
+            {
+                return GRushRpcResponse.Success("{\"status\":\"alreadyOwned\"}");
+            }
             switch (GRushMock.ShopPurchaseStatus)
             {
                 case GRushShopPurchaseStatus.Cancelled:
                     return GRushRpcResponse.Success("{\"status\":\"cancelled\"}");
                 case GRushShopPurchaseStatus.AlreadyOwned:
                     return GRushRpcResponse.Success("{\"status\":\"alreadyOwned\"}");
+                case GRushShopPurchaseStatus.Unknown:
+                    return GRushRpcResponse.Success("{\"status\":\"unknown\"}");
                 default:
                     Grant(sku);
                     return GRushRpcResponse.Success("{\"status\":\"redirecting\"}");
@@ -180,13 +191,16 @@ namespace GRushSdk
 
         internal static GRushRpcResponse HandlePending()
         {
-            return GrantsJson(false);
+            return GrantsJson(false, MaxPending);
         }
 
         internal static GRushRpcResponse HandleOwned()
         {
-            return GrantsJson(true);
+            return GrantsJson(true, int.MaxValue);
         }
+
+        // GameRush の pending は1回に 100 件まで返す。
+        private const int MaxPending = 100;
 
         internal static GRushRpcResponse HandleAck(string paramsJson)
         {
@@ -212,15 +226,20 @@ namespace GRushSdk
             return GRushRpcResponse.Success("{\"acked\":" + acked + "}");
         }
 
-        private static GRushRpcResponse GrantsJson(bool includeAcked)
+        private static GRushRpcResponse GrantsJson(bool includeAcked, int limit)
         {
             var builder = new StringBuilder("{\"grants\":[");
             var first = true;
+            var count = 0;
             foreach (var grant in grants)
             {
                 if (grant.Acked && !includeAcked)
                 {
                     continue;
+                }
+                if (count++ >= limit)
+                {
+                    break;
                 }
                 if (!first)
                 {

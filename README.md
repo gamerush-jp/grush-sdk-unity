@@ -146,11 +146,15 @@ ApplyPendingGrants();
 
 async void ApplyPendingGrants()
 {
-    var pending = await GRush.Shop.PendingAsync();
-    if (!pending.Ok || pending.Value.Length == 0) return;
-    foreach (var grant in pending.Value) save.AddItem(grant.Sku);
-    save.Write(); // 反映して保存してから Ack する
-    await GRush.Shop.AckAsync(System.Array.ConvertAll(pending.Value, grant => grant.Id));
+    while (true)
+    {
+        var pending = await GRush.Shop.PendingAsync(); // 1 回に最大 100 件
+        if (!pending.Ok || pending.Value.Length == 0) return;
+        foreach (var grant in pending.Value) save.AddItem(grant.Sku);
+        save.Write(); // 反映して保存してから Ack する
+        var acked = await GRush.Shop.AckAsync(System.Array.ConvertAll(pending.Value, grant => grant.Id));
+        if (!acked.Ok || pending.Value.Length < 100) return; // 100 件あれば残りをもう一度読む
+    }
 }
 
 var catalog = await GRush.Shop.ProductsAsync();
@@ -158,14 +162,16 @@ if (catalog.Ok && catalog.Value.Enabled)
 {
     save.Write(); // Redirecting が返るとページはすぐ決済画面へ移るので、先に保存する
     var bought = await GRush.Shop.PurchaseAsync(catalog.Value.Products[0].Sku);
+    // bought.Value.Status は Redirecting・Cancelled・AlreadyOwned・Unknown（RawStatus に生の値）
 }
 ```
 
 作者が登録した商品をプレイヤーが買い、届いた付与をゲームがセーブへ反映する。商品名と価格（`PriceJpy`、円）は作者が Studio か API キーで登録し、ゲームは `ProductsAsync` で読む。
 
 - 購入できるのは Web の GameRush だけ。アプリと LINE では `PurchaseAsync` が `Unsupported`、`ProductsAsync` は `Enabled` が `false` で `Products` は空。`PendingAsync`・`AckAsync`・`OwnedAsync` はどの面でも動く
-- `PurchaseAsync(sku)` が `Redirecting` を返すと、ページはすぐ決済画面へ移る。**ゲームは `PurchaseAsync` を呼ぶ前にセーブしておく。** ほかに `Cancelled`（やめた）と `AlreadyOwned`（もう持っている）が返る。`sku` が `^[a-z0-9][a-z0-9_.-]{0,63}$` でなければ送らずに `InvalidParams`。GameRush は決済の確認を最大 10 分待つ
+- `PurchaseAsync(sku)` が `Redirecting` を返すと、ページはすぐ決済画面へ移る。**ゲームは `PurchaseAsync` を呼ぶ前にセーブしておく。** ほかに `Cancelled`（やめた）と `AlreadyOwned`（もう持っている）が返る。知らない値は失敗にせず `Unknown` で返り、`GRushShopPurchaseResult.RawStatus` に生の文字列が入る。`sku` が `^[a-z0-9][a-z0-9_.-]{0,63}$` でなければ送らずに `InvalidParams`。GameRush は決済の確認を最大 10 分待つ
 - 付与は `AckAsync` するまで `PendingAsync` に残る。アイテムをセーブに反映して保存してから `AckAsync` する（渡せる id は 1〜100 件の付与 ID で、合わなければ送らずに `InvalidParams`）。起動時にも `PendingAsync` を読む
+- `PendingAsync` は1回に最大 100 件。Ack したら、残りがあればもう一度読む
 - `PendingReceived` は決済から戻って付与が届いたときに、買った `sku` を引数に次の `Update` で呼ばれる。購読より前に届いた合図は購読したときに1回だけ渡る。購読が1つ以上あるあいだだけ GameRush から受け取る
 - `OwnedAsync` は Ack 済みを含むすべての付与（`GRushShopGrant.Acked`）を返す
 - ゲームの中での使用は改ざんを防げない。GameRush が保証するのは、払った人に付与が届くことまで
@@ -307,7 +313,7 @@ GRushMockPlayerStates.Define("custom-rival", "{\"level\":3}", false, 1300);
 GRushMockPlayerStates.Preview(GRushMock.Rivals[0], "{\"level\":3}"); // 確認用の表示の写しを渡す
 ```
 
-作者アイテム販売のモックは、`GRushMockShop.Define(sku, name, priceJpy)` で置いた商品を `ProductsAsync` で返す。`PurchaseAsync` は決済画面へ移らず、すぐに付与を `Pending` に積んで `Redirecting` を返し、次の `Update` で `PendingReceived` を呼ぶ。置いていない sku は `InvalidParams`。`GRushMock.ShopPurchaseStatus` を `Cancelled` か `AlreadyOwned` にすると、付与を積まずにその結果を返す。`GRushMock.ShopEnabled = false` でアプリと LINE と同じ（`Enabled` が `false` の空、`PurchaseAsync` は `Unsupported`）になる。`GRushMockShop.Grant(sku)` は購入を経ずに付与を積む。sku と Ack の id は GameRush と同じ形で確かめる。呼び出しの間隔の上限は再現しない。`GRushMock.Reset()` で付与は消え、置いた商品は残る（`GRushMockShop.Clear()` で消す）。
+作者アイテム販売のモックは、`GRushMockShop.Define(sku, name, priceJpy)` で置いた商品を `ProductsAsync` で返す。`PurchaseAsync` は決済画面へ移らず、すぐに付与を `Pending` に積んで `Redirecting` を返し、次の `Update` で `PendingReceived` を呼ぶ。置いていない sku は `InvalidParams`、`GRushMock.SignedIn = false` では `SignInRequired`、付与済み（Ack 済みを含む）の sku は `AlreadyOwned`。`GRushMock.ShopPurchaseStatus` を `Cancelled`・`AlreadyOwned`・`Unknown` にすると、付与を積まずにその結果を返す。`PendingAsync` は GameRush と同じく1回に 100 件まで返す。`GRushMock.ShopEnabled = false` でアプリと LINE と同じ（`Enabled` が `false` の空、`PurchaseAsync` は `Unsupported`）になる。`GRushMockShop.Grant(sku)` は購入を経ずに付与を積む。sku と Ack の id は GameRush と同じ形で確かめる。呼び出しの間隔の上限は再現しない。`GRushMock.Reset()` で付与は消え、置いた商品は残る（`GRushMockShop.Clear()` で消す）。
 
 ```csharp
 GRushMockShop.Define("gem_pack", "ジェム 100 個", 120);

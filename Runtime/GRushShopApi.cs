@@ -107,7 +107,10 @@ namespace GRushSdk
                 new GRushShopCatalog
                 {
                     Enabled = wire.enabled,
-                    Products = GRushWire.ToShopProducts(wire.products),
+                    // 買えない面では、ランタイムが商品を返しても見せない。
+                    Products = wire.enabled
+                        ? GRushWire.ToShopProducts(wire.products)
+                        : new GRushShopProduct[0],
                 }
             );
         }
@@ -118,15 +121,15 @@ namespace GRushSdk
         /// <c>^[a-z0-9][a-z0-9_.-]{0,63}$</c> でなければ送らずに InvalidParams。アプリと LINE では Unsupported。
         /// GameRush の確認と決済を待つので、ほかの呼び出しより長く（最大 10 分）待つ。
         /// </summary>
-        public async Task<GRushResult<GRushShopPurchaseStatus>> PurchaseAsync(string sku)
+        public async Task<GRushResult<GRushShopPurchaseResult>> PurchaseAsync(string sku)
         {
             if (!GRush.IsShopAvailable)
             {
-                return GRushResult<GRushShopPurchaseStatus>.Unsupported();
+                return GRushResult<GRushShopPurchaseResult>.Unsupported();
             }
             if (!GRushShopRules.IsSku(sku))
             {
-                return GRushResult<GRushShopPurchaseStatus>.Failure(
+                return GRushResult<GRushShopPurchaseResult>.Failure(
                     GRushErrorCode.InvalidParams,
                     "Invalid sku."
                 );
@@ -134,22 +137,29 @@ namespace GRushSdk
             var response = await GRush.CallAsync("shop.purchase", GRushWire.StringParams("sku", sku));
             if (!response.Ok)
             {
-                return GRushResult<GRushShopPurchaseStatus>.Failure(response.Code, response.Message);
+                return GRushResult<GRushShopPurchaseResult>.Failure(response.Code, response.Message);
             }
             var wire = GRushWire.Parse<GRushShopPurchaseWire>(response.Value);
-            GRushShopPurchaseStatus status;
-            if (wire == null || !GRushWire.TryShopPurchaseStatus(wire.status, out status))
+            if (wire == null)
             {
-                return GRushResult<GRushShopPurchaseStatus>.Failure(
+                return GRushResult<GRushShopPurchaseResult>.Failure(
                     GRushErrorCode.Internal,
                     "GameRush returned an unreadable purchase result."
                 );
             }
-            return GRushResult<GRushShopPurchaseStatus>.Success(status);
+            // 新しい GameRush が足した status でも購入は進んでいることがあるので、失敗にせず Unknown と生の値で返す。
+            return GRushResult<GRushShopPurchaseResult>.Success(
+                new GRushShopPurchaseResult
+                {
+                    Status = GRushWire.ShopPurchaseStatusOf(wire.status),
+                    RawStatus = wire.status,
+                }
+            );
         }
 
         /// <summary>
-        /// まだ Ack していない付与。セーブへ反映して保存してから <see cref="AckAsync"/> する。
+        /// まだ Ack していない付与。1 回に最大 100 件。セーブへ反映して保存してから <see cref="AckAsync"/> し、
+        /// 残りがあればもう一度読む。
         /// </summary>
         public Task<GRushResult<GRushShopGrant[]>> PendingAsync()
         {

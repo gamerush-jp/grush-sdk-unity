@@ -30,7 +30,8 @@ namespace GRushSdk
 
         /// <summary>
         /// <c>Shop.PurchaseAsync</c> が返す結果。Redirecting のときだけ、すぐに付与を Pending に積んで
-        /// <c>Shop.PendingReceived</c> を呼ぶ。
+        /// <c>Shop.PendingReceived</c> を呼ぶ。ゲストは SignInRequired、付与済み（Ack 済みを含む）の sku は
+        /// この設定によらず AlreadyOwned。
         /// </summary>
         public static GRushShopPurchaseStatus ShopPurchaseStatus = GRushShopPurchaseStatus.Redirecting;
 
