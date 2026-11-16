@@ -9,7 +9,7 @@ namespace GRushSdk
     ///
     /// 購入できるのは Web の GameRush だけ。アプリと LINE では <see cref="PurchaseAsync"/> が Unsupported、
     /// <see cref="ProductsAsync"/> は Enabled が false で空。<see cref="PendingAsync"/>・<see cref="AckAsync"/>・
-    /// <see cref="OwnedAsync"/> はどの面でも動く。
+    /// <see cref="OwnedAsync"/> も今はアプリと LINE では Unsupported（Web で買った分は Web で受け取る）。
     ///
     /// 取りこぼさないために、次の順で使う。
     /// 1. <see cref="PurchaseAsync"/> を呼ぶ前にセーブを保存する。Redirecting が返るとページはすぐ決済画面へ移る。

@@ -168,7 +168,7 @@ if (catalog.Ok && catalog.Value.Enabled)
 
 作者が登録した商品をプレイヤーが買い、届いた付与をゲームがセーブへ反映する。商品名と価格（`PriceJpy`、円）は作者が Studio か API キーで登録し、ゲームは `ProductsAsync` で読む。
 
-- 購入できるのは Web の GameRush だけ。アプリと LINE では `PurchaseAsync` が `Unsupported`、`ProductsAsync` は `Enabled` が `false` で `Products` は空。`PendingAsync`・`AckAsync`・`OwnedAsync` はどの面でも動く
+- 購入できるのは Web の GameRush だけ。アプリと LINE では `PurchaseAsync` が `Unsupported`、`ProductsAsync` は `Enabled` が `false` で `Products` は空。`PendingAsync`・`AckAsync`・`OwnedAsync` も今はアプリと LINE では `Unsupported`（Web で買った分は Web で受け取る）
 - `PurchaseAsync(sku)` が `Redirecting` を返すと、ページはすぐ決済画面へ移る。**ゲームは `PurchaseAsync` を呼ぶ前にセーブしておく。** ほかに `Cancelled`（やめた）と `AlreadyOwned`（もう持っている）が返る。知らない値は失敗にせず `Unknown` で返り、`GRushShopPurchaseResult.RawStatus` に生の文字列が入る。`sku` が `^[a-z0-9][a-z0-9_.-]{0,63}$` でなければ送らずに `InvalidParams`。GameRush は決済の確認を最大 10 分待つ
 - 付与は `AckAsync` するまで `PendingAsync` に残る。アイテムをセーブに反映して保存してから `AckAsync` する（渡せる id は 1〜100 件の付与 ID で、合わなければ送らずに `InvalidParams`）。起動時にも `PendingAsync` を読む
 - `PendingAsync` は1回に最大 100 件。Ack したら、残りがあればもう一度読む
