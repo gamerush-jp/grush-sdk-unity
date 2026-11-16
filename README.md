@@ -7,7 +7,7 @@ GameRush の GameAPI を Unity から呼ぶための UPM パッケージ。ビ�
 Package Manager の `Add package from git URL...` に次を入れる。
 
 ```text
-https://github.com/gamerush-jp/grush-sdk-unity.git#v1.15.2
+https://github.com/gamerush-jp/grush-sdk-unity.git#v1.16.0
 ```
 
 Unity 2021.3 以降。ビルドターゲットは WebGL。
@@ -33,7 +33,29 @@ if (joined.Ok)
 }
 ```
 
-部屋が1通を捨てると `GRushRoom.Error` が届く。`Code` は `"messageTooLarge"`・`"rateLimited"`・`"badFrame"` で、ほかの値が届くこともある。部屋はつながったままで、続けて送れる。部屋が閉じるときは `Closed` だけが届く。
+部屋が1通を捨てると `GRushRoom.Error` が届く。`Code` は `"messageTooLarge"`・`"rateLimited"`・`"badFrame"`・`"targetNotAllowed"` で、ほかの値が届くこともある。部屋はつながったままで、続けて送れる。部屋が閉じるときは `Closed` だけが届く。
+
+### 部屋の定員と形
+
+```csharp
+var joined = await GRush.Net.JoinAsync(new GRushJoinOptions
+{
+    Mode = "raid",
+    MaxPeers = 32,
+    Topology = GRushTopology.Hub,
+    HostSelection = GRushHostSelection.Auto,
+});
+```
+
+`JoinAsync(GRushJoinOptions)` は `Mode`・`RoomCode`・`TargetRoomSize` に加えて、部屋の定員 `MaxPeers`（1〜100 の整数、0 は未指定で 8）と形 `Topology`（`Mesh`・`Hub`、`null` は未指定で `Mesh`）とホストの選び方 `HostSelection` を渡せる。`Mesh` は全員が全員へ送る形で、定員は 16 まで。`Hub` はホストへ集める形。`TargetRoomSize` は 1〜定員。範囲の外は `InvalidParams`。部屋の振り分けは同じ `Mode` で同じ定員と形の部屋の中で行う。`RoomCode` で指定した部屋が違う定員か形で既にあるときは `InvalidParams`。
+
+`HostSelection = GRushHostSelection.Auto` では、GameRush が端末の性能と部屋までの遅延からホストを選ぶ。入室から2秒ほどの間にホストが替わることがあるので、対戦を始める前に `HostChanged` を受け止める。渡さないと最初に入った人がホストになる。
+
+`Hub` の部屋では、ホスト以外が送れるのはホスト宛てと全員宛て（ホストにだけ届く）だけで、ほかの宛先へは送られず、`Error`（`Code` は `"targetNotAllowed"`）が届く。ホストには、ほかの参加者の送信が 50ms ごとにまとめて渡り、`Message` で1件ずつ届く。送り手ごとの順は保たれる。ホストは結果を全員へ配る。入力を受けている間のホストは、少なくとも 2 秒ごとに送る。ホストが送らない・抜ける・不在になると、GameRush はホストを替える。
+
+1 人が送れるのは、8 人以下の `Mesh` で毎秒 30 通、9 人以上の `Mesh` と `Hub` のホスト以外で毎秒 20 通。`Hub` のホストは人数に応じて増える。超えた分は `Error`（`Code` は `"rateLimited"`）で捨てられる。
+
+`MaxPeers`・`Topology`・`HostSelection` のどれかを渡すと `GRush.RoomConfigProtocolVersion`（11）が要り、`GRush.IsRoomConfigAvailable` が `false` の GameRush では入らずに `Unsupported` を返す。GameRush のアプリ側が古いと、定員と形を無視して 8 人の `Mesh` の部屋へ入る。そのとき `TargetRoomSize` が 9 以上なら `InvalidParams`。入った部屋の実際の定員と形は `GRushRoom.MaxPeers` と `GRushRoom.Topology` で確かめる。`protocolVersion` 11 未満の GameRush と、定員と形を伝えない部屋では `8` と `Mesh`。
 
 `GRush` は例外を投げない。GameRush の外で動かした場合も `GRushResult<T>.Ok` が `false`、`Code` が `GRushErrorCode.Unsupported` になるだけで、ゲームは止まらない（アナリティクスは `bool` を返す。下記）。
 
@@ -222,11 +244,13 @@ var opponent = GRushMock.AddPeer("Sparring Partner");
 opponent.Received += message => opponent.Send(reply, GRushChannel.Unreliable, GRushRoom.Everyone);
 ```
 
-`GRushMock.AddPeer` で作った相手は同じプロセス内の2人目の peer として部屋に入り、送受信が実際に往復する。部屋が8人で埋まっていれば `null` を返す。
+`GRushMock.AddPeer` で作った相手は同じプロセス内の2人目の peer として部屋に入り、送受信が実際に往復する。部屋が定員で埋まっていれば `null` を返す。定員は、ゲームが入る前は 8、入った後はその部屋の定員なので、9 人以上の部屋を試すときは先に `JoinAsync` で入ってから `AddPeer` する。
 
-モックの `GRush.Net.JoinAsync` は GameRush と同じく、`mode`（英数字と `._:-` の1〜32文字）か `roomCode`（英数字の4〜12文字）の形が違うか、`targetRoomSize` が 0（未指定）でも 1〜8 でもなければ `InvalidParams` で失敗する。部屋が埋まっていれば `Unavailable` で失敗する。
+モックの `GRush.Net.JoinAsync` は GameRush と同じく、`mode`（英数字と `._:-` の1〜32文字）か `roomCode`（英数字の4〜12文字）の形が違うか、`maxPeers` が 0（未指定）でも 1〜100 でもないか、`Mesh` で 17 以上か、`targetRoomSize` が 0（未指定）でも 1〜定員でもなければ `InvalidParams` で失敗する。部屋が埋まっていれば `Unavailable` で失敗する。
 
-モックの部屋は1つなので、`JoinAsync(mode, targetRoomSize)` は次のように働く。今の部屋の人数が `targetRoomSize` 以上なら、`GRushMock.AddPeer` で作った相手を外して `MOCKROOM2`、`MOCKROOM3` … の新しい部屋で始める。それより少なければ今の部屋へ入る。外された相手の `Send` はどこへも届かない。部屋数の上限は無いので、GameRush で新しい部屋を作れないときの振り分けは再現しない。
+モックの部屋は1つなので、`JoinAsync(mode, targetRoomSize)` は次のように働く。今の部屋の人数が `targetRoomSize`（定員のほうが小さければ定員）以上なら、`GRushMock.AddPeer` で作った相手を外して `MOCKROOM2`、`MOCKROOM3` … の新しい部屋で始める。それより少なければ今の部屋へ入る。外された相手の `Send` はどこへも届かない。部屋数の上限は無いので、GameRush で新しい部屋を作れないときの振り分けは再現しない。
+
+モックの部屋の定員と形は、ゲームが部屋に入ったときの `JoinAsync` で決まり、部屋が無人になるまで変わらない（`AddPeer` の相手だけが残っている部屋も無人ではない）。`roomCode` を渡さない `JoinAsync` が今の部屋と違う定員か形を渡すと、`AddPeer` で作った相手を外して新しい部屋で始める。`roomCode` が今の部屋のコードで、定員か形が違えば `InvalidParams` で失敗する。`Hub` の部屋のホストは index の最も小さい peer で、ホスト以外の送信は GameRush と同じく宛先を確かめ、全員宛てはホストにだけ届く。ゲームが許されない宛先へ送ると `Error`（`Code` は `"targetNotAllowed"`）が届き、`AddPeer` の相手の `Send` は `InvalidParams` を返す。`HostSelection`・入力の束ね・送信の上限・ホストの交代は再現しない。
 
 `GRushMock.RaiseRoomError(code, message)` は、自分がいる部屋に `GRushRoom.Error` を届ける（次のフレーム以降に届き、部屋は閉じない）。部屋にいなければ `false` を返す。
 
@@ -236,7 +260,7 @@ opponent.Received += message => opponent.Send(reply, GRushChannel.Unreliable, GR
 
 共有のモックは確認シートを出さず、`GRushMock.ShareStatus`（既定 `Opened`）を返す。`GRushMock.ShareAvailable = false` で共有できない環境を試せる。起動パラメータは GameRush と同じ制限で確かめ、合わなければ `InvalidParams`。本文と画像の検査はしない。
 
-アナリティクスのモックは、GameRush と同じ検査をして、通ったイベントを1件ずつ Console に出し、直近の 200 件を `GRushMock.AnalyticsEvents`（GameRush へ渡すのと同じ形の JSON の配列）で返す（`GRushMock.Reset()` で空になる）。弾いたイベントは、GameRush と同じく理由ごとに1回だけ警告する（`GRushMock.Reset()` でまた出る）。どこへも送らない。前面に出るまでの 30 件の溜め・本体の上限・同じステップを最初の1回だけ残す扱い・セッションあたりの上限は再現しないので、モックでは `true` の分がすべて記録に残る。モックが名乗る `protocolVersion` は 10。
+アナリティクスのモックは、GameRush と同じ検査をして、通ったイベントを1件ずつ Console に出し、直近の 200 件を `GRushMock.AnalyticsEvents`（GameRush へ渡すのと同じ形の JSON の配列）で返す（`GRushMock.Reset()` で空になる）。弾いたイベントは、GameRush と同じく理由ごとに1回だけ警告する（`GRushMock.Reset()` でまた出る）。どこへも送らない。前面に出るまでの 30 件の溜め・本体の上限・同じステップを最初の1回だけ残す扱い・セッションあたりの上限は再現しないので、モックでは `true` の分がすべて記録に残る。モックが名乗る `protocolVersion` は 11。
 
 相手探し・受信箱・交換所のモックは、`GRushMock.Rivals` の 3 人の相手を持つ。相手はそれぞれ rating 付きの公開プレイヤー状態を持ち、届いたメッセージを同じ kind と payload で送り返す。はじめと `GRushMock.Reset()` の後は、最初の相手からのメッセージ1通と、相手の受付中の出品を2件持つ。payload・offer・want・give の形、`operationId` での冪等、受付中の出品の上限、受諾の `Outcome`、`Pending` と Ack は GameRush と同じ規則で動く。通報を承諾すると（`GRushMock.ConfirmInboxReport` / `ConfirmTradeReport`、既定 `true`）相手をブロックし、その相手のメッセージと出品は見えなくなる。プレイヤー状態の通報は伏せていない状態にだけ届き、確認の答えを `GRushMock.ConfirmPlayerStateReport`（既定 `true`）で決める。
 

@@ -24,6 +24,11 @@ namespace GRushSdk
         private string roomCode;
         private int roomSerial = 1;
 
+        // 今の部屋の定員と形。configured はゲームが join で設定を決めたか。
+        private int maxPeers = GRushMockNetParams.DefaultMaxPeers;
+        private GRushTopology topology = GRushTopology.Mesh;
+        private bool configured;
+
         public static GRushMockHub Instance
         {
             get
@@ -41,23 +46,57 @@ namespace GRushSdk
             instance = null;
         }
 
+        /// <summary>
+        /// 部屋へ入る。部屋が埋まっていれば null を返す。部屋コードで指定した部屋が違う定員か形で
+        /// 既にあれば null を返し、mismatch を true にする。
+        /// </summary>
         public GRushJoinWire Join(
             string mode,
             string requestedCode,
             int targetRoomSize,
+            int requestedMaxPeers,
+            GRushTopology requestedTopology,
             string pseudoId,
             string displayName,
             string avatarUrl,
-            Action<GRushNetEvent> deliver
+            Action<GRushNetEvent> deliver,
+            out bool mismatch
         )
         {
-            if (
-                string.IsNullOrEmpty(requestedCode)
-                && targetRoomSize > 0
-                && members.Count >= Math.Min(targetRoomSize, GRushMockLimits.MaxPeers)
-            )
+            mismatch = false;
+            var sameConfig = requestedMaxPeers == maxPeers && requestedTopology == topology;
+            if (!string.IsNullOrEmpty(requestedCode))
+            {
+                // GameRush の部屋の設定は最初に入った人の join で決まり、後から変わらない。
+                if (configured && !sameConfig && requestedCode == roomCode)
+                {
+                    mismatch = true;
+                    return null;
+                }
+                if (configured && !sameConfig)
+                {
+                    StartNextRoom();
+                }
+            }
+            else if (configured && !sameConfig)
+            {
+                // GameRush は同じ定員と形の部屋だけから選ぶので、違う設定の join は別の部屋へ入る。
+                StartNextRoom();
+            }
+            else if (targetRoomSize > 0 && members.Count >= Math.Min(targetRoomSize, requestedMaxPeers))
             {
                 StartNextRoom();
+            }
+            if (!configured)
+            {
+                // AddPeer の相手しかいない部屋は、ゲームの最初の join で設定が決まる。
+                if (!FitsCapacity(requestedMaxPeers))
+                {
+                    return null;
+                }
+                maxPeers = requestedMaxPeers;
+                topology = requestedTopology;
+                configured = true;
             }
             var index = NextFreeIndex();
             if (index < 0)
@@ -98,6 +137,8 @@ namespace GRushSdk
                 epoch = 1,
                 transport = "ws",
                 serverTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                maxPeers = maxPeers,
+                topology = GRushWire.TopologyName(topology),
             };
         }
 
@@ -139,6 +180,7 @@ namespace GRushSdk
             members.Remove(member);
             outgoingSeq.Remove(member.Index);
             Announce(member, GRushNetEventKind.PeerLeave);
+            ForgetConfigIfEmpty();
         }
 
         public void Leave(int index)
@@ -151,16 +193,12 @@ namespace GRushSdk
             members.Remove(member);
             outgoingSeq.Remove(index);
             Announce(member, GRushNetEventKind.PeerLeave);
+            ForgetConfigIfEmpty();
         }
 
         public bool RaiseError(string code, string message)
         {
-            var detail =
-                "{\"code\":"
-                + GRushWire.Escape(code ?? string.Empty)
-                + ",\"message\":"
-                + GRushWire.Escape(message ?? string.Empty)
-                + "}";
+            var detail = ErrorJson(code, message);
             var delivered = false;
             foreach (var member in members.ToArray())
             {
@@ -168,26 +206,65 @@ namespace GRushSdk
                 {
                     continue;
                 }
-                var deliver = member.Deliver;
-                GRushDispatcher.Post(
-                    () => deliver(new GRushNetEvent { Kind = GRushNetEventKind.Error, Detail = detail })
-                );
+                PostError(member.Deliver, detail);
                 delivered = true;
             }
             return delivered;
         }
 
-        /// <summary>部屋に残っている相手の送信だけを通す。外された相手は前の部屋に残った扱いになる。</summary>
-        public void RouteFromPeer(GRushMockPeer peer, byte[] payload, GRushChannel channel, int to)
+        /// <summary>
+        /// 部屋に残っている相手の送信だけを通す。外された相手は前の部屋に残った扱いになる。
+        /// hub の部屋で宛先が許されなければ送らずに false を返す。
+        /// </summary>
+        public bool RouteFromPeer(GRushMockPeer peer, byte[] payload, GRushChannel channel, int to)
         {
-            if (members.Exists(candidate => candidate.Peer == peer))
+            if (!members.Exists(candidate => candidate.Peer == peer))
             {
-                Route(peer.Index, payload, payload.Length, channel, to);
+                return true;
             }
+            if (!IsAllowedTarget(peer.Index, to))
+            {
+                return false;
+            }
+            Route(peer.Index, payload, payload.Length, channel, to);
+            return true;
         }
 
-        public void Route(int from, byte[] payload, int count, GRushChannel channel, int to)
+        /// <summary>
+        /// ゲームの送信を通す。hub の部屋で宛先が許されなければ、GameRush と同じく送らずに
+        /// targetNotAllowed の error を届ける。
+        /// </summary>
+        public void RouteFromLocal(int from, byte[] payload, int count, GRushChannel channel, int to)
         {
+            if (!IsAllowedTarget(from, to))
+            {
+                var sender = members.Find(candidate => candidate.Index == from);
+                if (sender != null && sender.Deliver != null)
+                {
+                    PostError(sender.Deliver, "targetNotAllowed", "Send to the host only.");
+                }
+                return;
+            }
+            Route(from, payload, count, channel, to);
+        }
+
+        // hub の非ホストが送れるのはホスト宛てと全員宛てだけ。
+        private bool IsAllowedTarget(int from, int to)
+        {
+            if (topology != GRushTopology.Hub || from == HostIndex())
+            {
+                return true;
+            }
+            return to < 0 || to == HostIndex();
+        }
+
+        private void Route(int from, byte[] payload, int count, GRushChannel channel, int to)
+        {
+            // hub の非ホストの全員宛ては、GameRush と同じくホストにだけ届く。
+            if (topology == GRushTopology.Hub && from != HostIndex())
+            {
+                to = HostIndex();
+            }
             if (channel == GRushChannel.Unreliable && random.NextDouble() < GRushMock.UnreliableDropRate)
             {
                 return;
@@ -206,6 +283,27 @@ namespace GRushSdk
                 Buffer.BlockCopy(payload, 0, copy, 0, count);
                 DeliverMessage(member, from, copy, channel, seq);
             }
+        }
+
+        private static string ErrorJson(string code, string message)
+        {
+            return "{\"code\":"
+                + GRushWire.Escape(code ?? string.Empty)
+                + ",\"message\":"
+                + GRushWire.Escape(message ?? string.Empty)
+                + "}";
+        }
+
+        private static void PostError(Action<GRushNetEvent> deliver, string code, string message)
+        {
+            PostError(deliver, ErrorJson(code, message));
+        }
+
+        private static void PostError(Action<GRushNetEvent> deliver, string detail)
+        {
+            GRushDispatcher.Post(
+                () => deliver(new GRushNetEvent { Kind = GRushNetEventKind.Error, Detail = detail })
+            );
         }
 
         private void DeliverMessage(
@@ -277,11 +375,35 @@ namespace GRushSdk
             outgoingSeq.Clear();
             roomSerial += 1;
             roomCode = "MOCKROOM" + roomSerial;
+            maxPeers = GRushMockNetParams.DefaultMaxPeers;
+            topology = GRushTopology.Mesh;
+            configured = false;
+        }
+
+        // GameRush の部屋は無人になると設定を忘れる。
+        private void ForgetConfigIfEmpty()
+        {
+            if (members.Count == 0)
+            {
+                maxPeers = GRushMockNetParams.DefaultMaxPeers;
+                topology = GRushTopology.Mesh;
+                configured = false;
+            }
+        }
+
+        // 設定の決まっていない部屋にいる AddPeer の相手が、定員に収まるか。
+        private bool FitsCapacity(int capacity)
+        {
+            if (members.Count >= capacity)
+            {
+                return false;
+            }
+            return !members.Exists(member => member.Index >= capacity);
         }
 
         private int NextFreeIndex()
         {
-            for (var index = 0; index < GRushMockLimits.MaxPeers; index++)
+            for (var index = 0; index < maxPeers; index++)
             {
                 if (!members.Exists(member => member.Index == index))
                 {
@@ -328,10 +450,5 @@ namespace GRushSdk
             builder.Append(member.AvatarUrl == null ? "null" : GRushWire.Escape(member.AvatarUrl));
             return builder.Append('}').ToString();
         }
-    }
-
-    internal static class GRushMockLimits
-    {
-        public const int MaxPeers = 8;
     }
 }

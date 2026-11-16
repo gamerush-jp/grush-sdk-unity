@@ -36,13 +36,68 @@ namespace GRushSdk
         public bool IsStale;
     }
 
+    /// <summary>部屋の形。</summary>
+    public enum GRushTopology
+    {
+        /// <summary>全員が全員へ送る。定員は 16 人まで。</summary>
+        Mesh,
+
+        /// <summary>
+        /// ホストへ集める。ホスト以外が送れるのはホスト宛てと全員宛て（ホストにだけ届く）だけで、
+        /// ほかの宛先へ送ると送られずに <see cref="GRushRoom.Error"/>（Code は "targetNotAllowed"）が届く。
+        /// </summary>
+        Hub,
+    }
+
+    /// <summary>ホストの選び方。</summary>
+    public enum GRushHostSelection
+    {
+        /// <summary>最初に入った人がホストになる。</summary>
+        Default,
+
+        /// <summary>GameRush が端末の性能と部屋までの遅延からホストを選ぶ。入室の後にホストが替わることがある。</summary>
+        Auto,
+    }
+
+    /// <summary>
+    /// <see cref="GRushNetApi.JoinAsync(GRushJoinOptions)"/> の引数。どの項目も省略でき、省略の値は送らない。
+    /// 範囲の確かめは GameRush が行い、範囲の外は InvalidParams で返る。
+    /// </summary>
+    public sealed class GRushJoinOptions
+    {
+        /// <summary>部屋を分ける名前。null か空なら "default"。</summary>
+        public string Mode;
+
+        /// <summary>入る部屋のコード。null か空なら、空きのある部屋か新しい部屋へ入る。</summary>
+        public string RoomCode;
+
+        /// <summary>部屋の目安の人数。1〜定員の整数。0 は未指定。</summary>
+        public int TargetRoomSize;
+
+        /// <summary>
+        /// 部屋の定員。1〜100 の整数で、<see cref="GRushTopology.Mesh"/> は 16 まで。0 は未指定で、定員は 8。
+        /// </summary>
+        public int MaxPeers;
+
+        /// <summary>部屋の形。null は未指定で、<see cref="GRushTopology.Mesh"/>。</summary>
+        public GRushTopology? Topology;
+
+        /// <summary>ホストの選び方。</summary>
+        public GRushHostSelection HostSelection;
+
+        internal bool UsesRoomConfig
+        {
+            get { return MaxPeers != 0 || Topology.HasValue || HostSelection != GRushHostSelection.Default; }
+        }
+    }
+
     public struct GRushRoomStats
     {
         public string Transport;
     }
 
     /// <summary>
-    /// 部屋が1通を捨てた理由。Code は "messageTooLarge"・"rateLimited"・"badFrame" で、
+    /// 部屋が1通を捨てた理由。Code は "messageTooLarge"・"rateLimited"・"badFrame"・"targetNotAllowed" で、
     /// ここに無い値が届くこともある。
     /// </summary>
     public struct GRushRoomError

@@ -24,10 +24,10 @@ namespace GRushSdk
             get { return true; }
         }
 
-        // モックが実装している一番新しい機能（確認用の表示）の版数。
+        // モックが実装している一番新しい機能（部屋の定員と形）の版数。
         public int ProtocolVersion
         {
-            get { return GRush.PlayerStatePreviewProtocolVersion; }
+            get { return GRush.RoomConfigProtocolVersion; }
         }
 
         public bool IsAnalyticsAvailable
@@ -134,7 +134,7 @@ namespace GRushSdk
             {
                 return;
             }
-            GRushMockHub.Instance.Route(localIndex, payload, count, channel, to);
+            GRushMockHub.Instance.RouteFromLocal(localIndex, payload, count, channel, to);
         }
 
         public void SetNetEventHandler(Action<GRushNetEvent> handler)
@@ -452,20 +452,33 @@ namespace GRushSdk
             var mode = request == null ? null : request.mode;
             var roomCode = request == null ? null : request.roomCode;
             var targetRoomSize = request == null ? 0 : request.targetRoomSize;
-            var error = GRushMockNetParams.Validate(mode, roomCode, targetRoomSize);
+            var maxPeers = request == null ? 0 : request.maxPeers;
+            var topology = request == null ? null : request.topology;
+            var error = GRushMockNetParams.Validate(mode, roomCode, targetRoomSize, maxPeers, topology);
             if (error != null)
             {
                 return GRushRpcResponse.Failure(GRushErrorCode.InvalidParams, error);
             }
+            bool mismatch;
             var wire = GRushMockHub.Instance.Join(
                 GRushMockNetParams.NormalizeMode(mode),
                 GRushMockNetParams.NormalizeRoomCode(roomCode),
                 targetRoomSize,
+                GRushMockNetParams.NormalizeMaxPeers(maxPeers),
+                GRushMockNetParams.NormalizeTopology(topology),
                 PseudoId,
                 Consented ? GRushMock.DisplayName : null,
                 Consented ? GRushMock.AvatarUrl : null,
-                OnHubEvent
+                OnHubEvent,
+                out mismatch
             );
+            if (mismatch)
+            {
+                return GRushRpcResponse.Failure(
+                    GRushErrorCode.InvalidParams,
+                    GRushMockNetParams.RoomMismatchMessage
+                );
+            }
             if (wire == null)
             {
                 return GRushRpcResponse.Failure(GRushErrorCode.Unavailable, "The mock room is full.");
