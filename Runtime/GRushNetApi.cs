@@ -41,11 +41,35 @@ namespace GRushSdk
             return JoinAsync(mode, null, targetRoomSize);
         }
 
-        private async Task<GRushResult<GRushRoom>> JoinAsync(
+        /// <summary>
+        /// 部屋の定員と形・ホストの選び方を選んで部屋へ入る。Mode・RoomCode・TargetRoomSize は
+        /// ほかの JoinAsync と同じで、TargetRoomSize の上限は定員になる。
+        /// MaxPeers・Topology・HostSelection のどれかを渡すと <see cref="GRush.RoomConfigProtocolVersion"/> が要り、
+        /// 満たさない GameRush では入らずに Unsupported を返す。
+        /// 部屋コードで指定した部屋が違う定員か形で既にあるときは InvalidParams。
+        /// 入った部屋の定員と形は <see cref="GRushRoom.MaxPeers"/> と <see cref="GRushRoom.Topology"/> で確かめる。
+        /// </summary>
+        /// <param name="options">join の引数。null は何も渡さないのと同じ。</param>
+        public Task<GRushResult<GRushRoom>> JoinAsync(GRushJoinOptions options)
+        {
+            var effective = options ?? new GRushJoinOptions();
+            if (effective.UsesRoomConfig && !GRush.IsRoomConfigAvailable)
+            {
+                return Task.FromResult(GRushResult<GRushRoom>.Unsupported());
+            }
+            return JoinWithParamsAsync(GRushWire.JoinParams(effective));
+        }
+
+        private Task<GRushResult<GRushRoom>> JoinAsync(
             string mode,
             string roomCode,
             int targetRoomSize
         )
+        {
+            return JoinWithParamsAsync(GRushWire.JoinParams(mode, roomCode, targetRoomSize));
+        }
+
+        private async Task<GRushResult<GRushRoom>> JoinWithParamsAsync(string paramsJson)
         {
             if (!GRush.IsAvailable)
             {
@@ -58,10 +82,7 @@ namespace GRushSdk
             {
                 previous.CloseLocally("replaced");
             }
-            var response = await GRush.CallAsync(
-                "net.join",
-                GRushWire.JoinParams(mode, roomCode, targetRoomSize)
-            );
+            var response = await GRush.CallAsync("net.join", paramsJson);
             if (!response.Ok)
             {
                 return GRushResult<GRushRoom>.Failure(response.Code, response.Message);

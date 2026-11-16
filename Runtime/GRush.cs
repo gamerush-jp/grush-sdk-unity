@@ -31,6 +31,13 @@ namespace GRushSdk
         /// <summary>確認用の表示の写しを受け取る（<c>PlayerState.PreviewReceived</c>）のに要る版数。</summary>
         public const int PlayerStatePreviewProtocolVersion = 10;
 
+        /// <summary>
+        /// 部屋の定員と形を選び、ホストを端末の性能と遅延で選ばせる（<see cref="GRushJoinOptions"/> の
+        /// MaxPeers・Topology・HostSelection）のと、<see cref="GRushRoom.MaxPeers"/> と
+        /// <see cref="GRushRoom.Topology"/> を読むのに要る版数。
+        /// </summary>
+        public const int RoomConfigProtocolVersion = 11;
+
         public const int MaxMessageBytes = 8 * 1024;
 
         private static IGRushBackend backend;
@@ -117,6 +124,14 @@ namespace GRushSdk
         public static bool IsPlayerStatePreviewAvailable
         {
             get { return IsAvailable && Backend.ProtocolVersion >= PlayerStatePreviewProtocolVersion; }
+        }
+
+        /// <summary>
+        /// 部屋の定員と形を選べるか（<see cref="RoomConfigProtocolVersion"/>）。古いランタイムと GameRush の外では false。
+        /// </summary>
+        public static bool IsRoomConfigAvailable
+        {
+            get { return IsAvailable && Backend.ProtocolVersion >= RoomConfigProtocolVersion; }
         }
 
         public static bool IsAvailable

@@ -8,6 +8,9 @@ namespace GRushSdk
     {
         public const int Everyone = -1;
 
+        /// <summary>定員を選ばない部屋の定員。</summary>
+        public const int DefaultMaxPeers = 8;
+
         private readonly List<GRushPeer> peers = new List<GRushPeer>();
         private readonly Dictionary<int, uint> lastSeq = new Dictionary<int, uint>();
         private readonly double serverOffsetMs;
@@ -20,6 +23,17 @@ namespace GRushSdk
         public int RoomEpoch { get; private set; }
         public int LocalPeerId { get; private set; }
         public bool IsClosed { get; private set; }
+
+        /// <summary>
+        /// 部屋の定員。<see cref="GRush.RoomConfigProtocolVersion"/> 未満の GameRush と、定員を伝えない部屋では 8。
+        /// </summary>
+        public int MaxPeers { get; private set; }
+
+        /// <summary>
+        /// 部屋の形。<see cref="GRush.RoomConfigProtocolVersion"/> 未満の GameRush と、形を伝えない部屋では
+        /// <see cref="GRushTopology.Mesh"/>。
+        /// </summary>
+        public GRushTopology Topology { get; private set; }
 
         public int HostPeerId
         {
@@ -64,6 +78,9 @@ namespace GRushSdk
             LocalPeerId = wire.localPeerIndex;
             hostPeerId = wire.hostIndex;
             transport = wire.transport;
+            var configured = GRush.ProtocolVersion >= GRush.RoomConfigProtocolVersion;
+            MaxPeers = configured && wire.maxPeers > 0 ? wire.maxPeers : DefaultMaxPeers;
+            Topology = configured && wire.topology == "hub" ? GRushTopology.Hub : GRushTopology.Mesh;
             serverOffsetMs = wire.serverTimeMs - LocalNowMs();
             if (wire.peers != null)
             {

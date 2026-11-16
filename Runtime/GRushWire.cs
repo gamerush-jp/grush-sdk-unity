@@ -41,6 +41,10 @@ namespace GRushSdk
         public int epoch;
         public string transport;
         public double serverTimeMs;
+
+        // 古いランタイムは返さず、0 と null になる。
+        public int maxPeers;
+        public string topology;
     }
 
     [Serializable]
@@ -267,6 +271,9 @@ namespace GRushSdk
         public string mode;
         public string roomCode;
         public int targetRoomSize;
+        public int maxPeers;
+        public string topology;
+        public string hostSelection;
     }
 
     internal static class GRushWire
@@ -295,6 +302,21 @@ namespace GRushSdk
 
         public static string JoinParams(string mode, string roomCode, int targetRoomSize)
         {
+            return JoinParams(
+                new GRushJoinOptions
+                {
+                    Mode = mode,
+                    RoomCode = roomCode,
+                    TargetRoomSize = targetRoomSize,
+                }
+            );
+        }
+
+        public static string JoinParams(GRushJoinOptions options)
+        {
+            var mode = options.Mode;
+            var roomCode = options.RoomCode;
+            var targetRoomSize = options.TargetRoomSize;
             var builder = new StringBuilder("{");
             builder.Append("\"mode\":").Append(Escape(string.IsNullOrEmpty(mode) ? "default" : mode));
             if (!string.IsNullOrEmpty(roomCode))
@@ -305,7 +327,24 @@ namespace GRushSdk
             {
                 builder.Append(",\"targetRoomSize\":").Append(targetRoomSize);
             }
+            if (options.MaxPeers != 0)
+            {
+                builder.Append(",\"maxPeers\":").Append(options.MaxPeers);
+            }
+            if (options.Topology.HasValue)
+            {
+                builder.Append(",\"topology\":").Append(Escape(TopologyName(options.Topology.Value)));
+            }
+            if (options.HostSelection == GRushHostSelection.Auto)
+            {
+                builder.Append(",\"hostSelection\":\"auto\"");
+            }
             return builder.Append('}').ToString();
+        }
+
+        public static string TopologyName(GRushTopology topology)
+        {
+            return topology == GRushTopology.Hub ? "hub" : "mesh";
         }
 
         public static GRushPlayer ToPlayer(GRushPlayerWire wire)

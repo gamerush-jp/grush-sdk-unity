@@ -41,7 +41,8 @@ namespace GRushSdk
         }
 
         /// <summary>
-        /// 同じプロセスの中の相手を部屋に入れる。部屋が埋まっていれば null を返す。
+        /// 同じプロセスの中の相手を部屋に入れる。部屋が埋まっていれば null を返す。定員は、ゲームが入る前は 8、
+        /// 入った後はその部屋の定員。
         /// </summary>
         public static GRushMockPeer AddPeer(string displayName)
         {
@@ -118,13 +119,23 @@ namespace GRushSdk
             return Send(payload, GRushChannel.Reliable, GRushRoom.Everyone);
         }
 
+        /// <summary>
+        /// 部屋へ送る。hub の部屋でこの相手がホストでなければ、送れるのはホスト宛てと全員宛て（ホストにだけ届く）だけで、
+        /// ほかの宛先は送らずに InvalidParams を返す。
+        /// </summary>
         public GRushResult<bool> Send(byte[] payload, GRushChannel channel, int to)
         {
             if (payload == null || payload.Length > GRush.MaxMessageBytes)
             {
                 return GRushResult<bool>.Failure(GRushErrorCode.InvalidParams, "Payload is invalid.");
             }
-            GRushMockHub.Instance.RouteFromPeer(this, payload, channel, to);
+            if (!GRushMockHub.Instance.RouteFromPeer(this, payload, channel, to))
+            {
+                return GRushResult<bool>.Failure(
+                    GRushErrorCode.InvalidParams,
+                    "targetNotAllowed: send to the host only."
+                );
+            }
             return GRushResult<bool>.Success(true);
         }
 
