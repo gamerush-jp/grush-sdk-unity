@@ -5,6 +5,7 @@ var GRushBridgeLibrary = {
     unbind: null,
     unbindLocale: null,
     unbindPlayerStatePreview: null,
+    unbindShopPending: null,
 
     api: function (name) {
       return typeof window === "undefined" ? null : window[name] || null;
@@ -16,6 +17,23 @@ var GRushBridgeLibrary = {
 
     launchApi: function () {
       return GRushBridge.api("GRushLaunch") || GRushBridge.api("GameRushLaunch");
+    },
+
+    shopApi: function () {
+      return GRushBridge.api("GRushShop") || GRushBridge.api("GameRushShop");
+    },
+
+    // Products that cannot be bought here are never shown, even if the runtime lists them.
+    shopCatalog: function (value) {
+      var enabled = !!(value && value.enabled === true);
+      return {
+        enabled: enabled,
+        products: enabled && Array.isArray(value.products) ? value.products : [],
+      };
+    },
+
+    shopGrants: function (value) {
+      return { grants: Array.isArray(value && value.grants) ? value.grants : [] };
     },
 
     // JsonUtility cannot read a dictionary, so the params travel as an array of key and value pairs.
@@ -264,6 +282,16 @@ var GRushBridgeLibrary = {
       if (method === "trade.report" && trade) {
         return GRushBridge.envelope(trade.report(args.tradeId), "reported");
       }
+      var shop = GRushBridge.shopApi();
+      if (method === "shop.products" && shop) return shop.products().then(GRushBridge.shopCatalog);
+      if (method === "shop.purchase" && shop) return GRushBridge.envelope(shop.purchase(args.sku), "status");
+      if (method === "shop.pending" && shop) {
+        return GRushBridge.envelope(shop.pending(), "grants").then(GRushBridge.shopGrants);
+      }
+      if (method === "shop.ack" && shop) return GRushBridge.envelope(shop.ack(args.ids), "acked");
+      if (method === "shop.owned" && shop) {
+        return GRushBridge.envelope(shop.owned(), "grants").then(GRushBridge.shopGrants);
+      }
       var locale = GRushBridge.localeApi();
       if (method === "locale.get" && locale) return locale.get();
       var launch = GRushBridge.launchApi();
@@ -403,6 +431,37 @@ var GRushBridgeLibrary = {
     }
   },
   GRushJsPlayerStatePreviewUnsubscribe__deps: ["$GRushBridge"],
+
+  // The signal travels as {"sku": ...}. A grant that arrived before this subscription is handed over once by GameRush.
+  GRushJsShopPendingSubscribe: function (onPending) {
+    var shop = GRushBridge.shopApi();
+    if (!shop || typeof shop.onPending !== "function" || GRushBridge.unbindShopPending) return;
+    try {
+      GRushBridge.unbindShopPending = shop.onPending(function (event) {
+        var sku = event && typeof event.sku === "string" ? event.sku : "";
+        var text = JSON.stringify({ sku: sku });
+        var size = lengthBytesUTF8(text) + 1;
+        var ptr = _malloc(size);
+        stringToUTF8(text, ptr, size);
+        {{{ makeDynCall("vii", "onPending") }}}(ptr, size - 1);
+        _free(ptr);
+      });
+    } catch (error) {
+      GRushBridge.unbindShopPending = null;
+    }
+  },
+  GRushJsShopPendingSubscribe__deps: ["$GRushBridge", "malloc", "free"],
+
+  GRushJsShopPendingUnsubscribe: function () {
+    var unbind = GRushBridge.unbindShopPending;
+    GRushBridge.unbindShopPending = null;
+    if (typeof unbind === "function") {
+      try {
+        unbind();
+      } catch (error) {}
+    }
+  },
+  GRushJsShopPendingUnsubscribe__deps: ["$GRushBridge"],
 
   GRushJsSend: function (dataPtr, length, channel, to) {
     var net = GRushBridge.api("GRushNet");

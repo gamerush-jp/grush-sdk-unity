@@ -13,7 +13,8 @@ namespace GRushSdk
             IGRushLocaleBackend,
             IGRushPlayerStatePreviewBackend,
             IGRushLaunchBackend,
-            IGRushAnalyticsBackend
+            IGRushAnalyticsBackend,
+            IGRushShopBackend
     {
         private delegate void RpcCallback(int requestId, int ok, IntPtr json, int length);
         private delegate void NetCallback(
@@ -72,6 +73,17 @@ namespace GRushSdk
         private static readonly PlayerStatePreviewCallback PlayerStatePreviewHandler =
             OnPlayerStatePreview;
         private static Action<string> playerStatePreviewHandler;
+
+        private delegate void ShopPendingCallback(IntPtr json, int length);
+
+        [DllImport("__Internal")]
+        private static extern void GRushJsShopPendingSubscribe(ShopPendingCallback onPending);
+
+        [DllImport("__Internal")]
+        private static extern void GRushJsShopPendingUnsubscribe();
+
+        private static readonly ShopPendingCallback ShopPendingHandler = OnShopPending;
+        private static Action<string> shopPendingHandler;
 
         private static readonly LocaleCallback LocaleHandler = OnLocale;
         private static Action<string> localeHandler;
@@ -171,6 +183,21 @@ namespace GRushSdk
             }
         }
 
+        // GameRush の onPending も登録ごとに外す関数を返すので、JS への登録はハンドラの有無が変わったときだけにする。
+        public void SetShopPendingHandler(Action<string> handler)
+        {
+            var had = shopPendingHandler != null;
+            shopPendingHandler = handler;
+            if (!had && handler != null)
+            {
+                GRushJsShopPendingSubscribe(ShopPendingHandler);
+            }
+            else if (had && handler == null)
+            {
+                GRushJsShopPendingUnsubscribe();
+            }
+        }
+
         public string LaunchCurrentJson()
         {
             return GRushJsLaunchCurrent();
@@ -251,6 +278,18 @@ namespace GRushSdk
         private static void OnPlayerStatePreview(IntPtr json, int length)
         {
             var handler = playerStatePreviewHandler;
+            if (handler == null)
+            {
+                return;
+            }
+            var text = ReadString(json, length);
+            GRushDispatcher.Post(() => handler(text));
+        }
+
+        [MonoPInvokeCallback(typeof(ShopPendingCallback))]
+        private static void OnShopPending(IntPtr json, int length)
+        {
+            var handler = shopPendingHandler;
             if (handler == null)
             {
                 return;

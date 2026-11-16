@@ -23,6 +23,19 @@ namespace GRushSdk
         public static bool ConfirmPlayerStateReport = true;
 
         /// <summary>
+        /// 作者アイテム販売で買える面か。false はアプリと LINE と同じく、<c>Shop.ProductsAsync</c> が
+        /// Enabled false の空を返し、<c>Shop.PurchaseAsync</c> が Unsupported になる。
+        /// </summary>
+        public static bool ShopEnabled = true;
+
+        /// <summary>
+        /// <c>Shop.PurchaseAsync</c> が返す結果。Redirecting のときだけ、すぐに付与を Pending に積んで
+        /// <c>Shop.PendingReceived</c> を呼ぶ。ゲストは SignInRequired、付与済み（Ack 済みを含む）の sku は
+        /// この設定によらず AlreadyOwned。
+        /// </summary>
+        public static GRushShopPurchaseStatus ShopPurchaseStatus = GRushShopPurchaseStatus.Redirecting;
+
+        /// <summary>
         /// <see cref="GRush.Launch"/> が返す起動パラメータ（<c>gp.</c> を除いたキーと値）。
         /// GameRush の制限（キー・値の形と 8 個まで）では確かめずにそのまま返す。<see cref="Reset"/> で空になる。
         /// </summary>
@@ -91,8 +104,8 @@ namespace GRushSdk
         }
 
         /// <summary>
-        /// 表示言語・起動パラメータ・部屋・分析イベント・受信箱・交換所（通報によるブロックを含む）を
-        /// はじめの状態へ戻す。
+        /// 表示言語・起動パラメータ・部屋・分析イベント・受信箱・交換所（通報によるブロックを含む）・
+        /// 作者アイテム販売の付与をはじめの状態へ戻す。<see cref="GRushMockShop.Define"/> で置いた商品は残る。
         /// </summary>
         public static void Reset()
         {
@@ -102,6 +115,7 @@ namespace GRushSdk
             GRushMockHub.Reset();
             GRushMockInbox.Reset();
             GRushMockTrades.Reset();
+            GRushMockShop.Reset();
         }
     }
 

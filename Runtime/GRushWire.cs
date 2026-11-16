@@ -164,6 +164,49 @@ namespace GRushSdk
     }
 
     [Serializable]
+    internal class GRushShopProductWire
+    {
+        public string sku;
+        public string name;
+        public int priceJpy;
+    }
+
+    [Serializable]
+    internal class GRushShopProductsWire
+    {
+        public bool enabled;
+        public GRushShopProductWire[] products;
+    }
+
+    [Serializable]
+    internal class GRushShopPurchaseWire
+    {
+        public string status;
+    }
+
+    [Serializable]
+    internal class GRushShopGrantWire
+    {
+        public string id;
+        public string sku;
+        public string createdAt;
+        public bool acked;
+    }
+
+    [Serializable]
+    internal class GRushShopGrantsWire
+    {
+        public GRushShopGrantWire[] grants;
+    }
+
+    // 親から届く合図 grush:shop:pending の本文。
+    [Serializable]
+    internal class GRushShopPendingWire
+    {
+        public string sku;
+    }
+
+    [Serializable]
     internal class GRushPlayerStateQueryWire
     {
         public string[] pseudoIds;
@@ -745,6 +788,65 @@ namespace GRushSdk
                     : wire.action == "receiveOffer" ? GRushTradeAction.ReceiveOffer
                     : GRushTradeAction.Unknown,
             };
+        }
+
+        public static GRushShopPurchaseStatus ShopPurchaseStatusOf(string status)
+        {
+            switch (status)
+            {
+                case "redirecting":
+                    return GRushShopPurchaseStatus.Redirecting;
+                case "cancelled":
+                    return GRushShopPurchaseStatus.Cancelled;
+                case "alreadyOwned":
+                    return GRushShopPurchaseStatus.AlreadyOwned;
+                default:
+                    return GRushShopPurchaseStatus.Unknown;
+            }
+        }
+
+        public static GRushShopProduct[] ToShopProducts(GRushShopProductWire[] wires)
+        {
+            var source = wires ?? new GRushShopProductWire[0];
+            var products = new List<GRushShopProduct>(source.Length);
+            foreach (var wire in source)
+            {
+                if (wire != null && !string.IsNullOrEmpty(wire.sku))
+                {
+                    products.Add(
+                        new GRushShopProduct
+                        {
+                            Sku = wire.sku,
+                            Name = wire.name ?? string.Empty,
+                            PriceJpy = wire.priceJpy,
+                        }
+                    );
+                }
+            }
+            return products.ToArray();
+        }
+
+        public static GRushShopGrant[] ToShopGrants(GRushShopGrantWire[] wires)
+        {
+            var source = wires ?? new GRushShopGrantWire[0];
+            var grants = new List<GRushShopGrant>(source.Length);
+            foreach (var wire in source)
+            {
+                // sku の無い付与はゲームが反映できないので捨てる。
+                if (wire != null && !string.IsNullOrEmpty(wire.id) && !string.IsNullOrEmpty(wire.sku))
+                {
+                    grants.Add(
+                        new GRushShopGrant
+                        {
+                            Id = wire.id,
+                            Sku = wire.sku,
+                            CreatedAt = wire.createdAt,
+                            Acked = wire.acked,
+                        }
+                    );
+                }
+            }
+            return grants.ToArray();
         }
 
         public static GRushTradeStatus TradeStatusOf(string status)
