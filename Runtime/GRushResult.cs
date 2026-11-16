@@ -54,6 +54,7 @@ namespace GRushSdk
         {
             switch (code)
             {
+                case "unsupported":
                 case "unsupportedMethod":
                     return GRushErrorCode.Unsupported;
                 case "unavailable":

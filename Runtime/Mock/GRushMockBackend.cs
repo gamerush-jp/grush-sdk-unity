@@ -9,7 +9,8 @@ namespace GRushSdk
             IGRushLocaleBackend,
             IGRushPlayerStatePreviewBackend,
             IGRushLaunchBackend,
-            IGRushAnalyticsBackend
+            IGRushAnalyticsBackend,
+            IGRushShopBackend
     {
         private const string PseudoIdKey = "grush.mock.pseudoId";
         private const string ConsentKey = "grush.mock.profileConsent";
@@ -17,6 +18,7 @@ namespace GRushSdk
         private Action<GRushNetEvent> netHandler;
         private Action<string> localeHandler;
         private Action<string> playerStatePreviewHandler;
+        private Action<string> shopPendingHandler;
         private int localIndex = -1;
 
         public bool IsAvailable
@@ -24,10 +26,10 @@ namespace GRushSdk
             get { return true; }
         }
 
-        // モックが実装している一番新しい機能（部屋の定員と形）の版数。
+        // モックが実装している一番新しい機能（作者アイテム販売）の版数。
         public int ProtocolVersion
         {
-            get { return GRush.RoomConfigProtocolVersion; }
+            get { return GRush.ShopProtocolVersion; }
         }
 
         public bool IsAnalyticsAvailable
@@ -217,6 +219,24 @@ namespace GRushSdk
             GRushMockPlayerStatePreview.SetHandler(posted, null);
         }
 
+        public void SetShopPendingHandler(Action<string> handler)
+        {
+            var previous = shopPendingHandler;
+            shopPendingHandler = null;
+            if (previous != null)
+            {
+                GRushMockShop.SetHandler(null, previous);
+            }
+            if (handler == null)
+            {
+                return;
+            }
+            // GameRush と同じく、受け取ったときに同期で呼ばず、次の Update で渡す。
+            Action<string> posted = json => GRushDispatcher.Post(() => handler(json));
+            shopPendingHandler = posted;
+            GRushMockShop.SetHandler(posted, null);
+        }
+
         private GRushRpcResponse Handle(string method, string paramsJson)
         {
             // WebGL のバックエンドが JavaScript へ渡すのと同じ形（対になっていないサロゲートを U+FFFD に替えた形）で
@@ -293,6 +313,16 @@ namespace GRushSdk
                     return GRushMockTrades.HandleAck(paramsJson, PseudoId);
                 case "trade.report":
                     return GRushMockTrades.HandleReport(paramsJson, PseudoId);
+                case "shop.products":
+                    return GRushMockShop.HandleProducts();
+                case "shop.purchase":
+                    return GRushMockShop.HandlePurchase(paramsJson);
+                case "shop.pending":
+                    return GRushMockShop.HandlePending();
+                case "shop.ack":
+                    return GRushMockShop.HandleAck(paramsJson);
+                case "shop.owned":
+                    return GRushMockShop.HandleOwned();
                 case "locale.get":
                     return GRushRpcResponse.Success(GRushMockLocale.CurrentJson());
                 case "launch.get":

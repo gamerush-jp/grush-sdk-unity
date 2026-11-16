@@ -38,6 +38,9 @@ namespace GRushSdk
         /// </summary>
         public const int RoomConfigProtocolVersion = 11;
 
+        /// <summary>作者アイテム販売（<see cref="Shop"/>）に要る版数。</summary>
+        public const int ShopProtocolVersion = 12;
+
         public const int MaxMessageBytes = 8 * 1024;
 
         private static IGRushBackend backend;
@@ -51,6 +54,7 @@ namespace GRushSdk
         private static GRushInboxApi inbox;
         private static GRushTradeApi trade;
         private static GRushLaunchApi launch;
+        private static GRushShopApi shop;
 
         public static IGRushBackend Backend
         {
@@ -132,6 +136,15 @@ namespace GRushSdk
         public static bool IsRoomConfigAvailable
         {
             get { return IsAvailable && Backend.ProtocolVersion >= RoomConfigProtocolVersion; }
+        }
+
+        /// <summary>
+        /// 作者アイテム販売を呼べるか（<see cref="ShopProtocolVersion"/>）。古いランタイムと GameRush の外では false。
+        /// 購入できる面かどうかは <c>Shop.ProductsAsync</c> の Enabled で見る。
+        /// </summary>
+        public static bool IsShopAvailable
+        {
+            get { return IsAvailable && Backend.ProtocolVersion >= ShopProtocolVersion; }
         }
 
         public static bool IsAvailable
@@ -267,8 +280,24 @@ namespace GRushSdk
         }
 
         /// <summary>
+        /// 作者アイテム販売。作者が登録した商品を買い、届いた付与をセーブへ反映してから Ack する。
+        /// </summary>
+        public static GRushShopApi Shop
+        {
+            get
+            {
+                if (shop == null)
+                {
+                    shop = new GRushShopApi();
+                }
+                return shop;
+            }
+        }
+
+        /// <summary>
         /// バックエンドを差し替える。null なら実行環境に合うものを作り直す。
-        /// 登録済みの <c>Locale.Changed</c> と <c>PlayerState.PreviewReceived</c> は新しいバックエンドの通知を受け続ける。
+        /// 登録済みの <c>Locale.Changed</c>・<c>PlayerState.PreviewReceived</c>・<c>Shop.PendingReceived</c> は
+        /// 新しいバックエンドの通知を受け続ける。
         /// </summary>
         public static void UseBackend(IGRushBackend replacement)
         {
@@ -286,10 +315,11 @@ namespace GRushSdk
             trade = null;
             launch = null;
             backend = replacement ?? GRushBackendFactory.Create();
-            // Locale と PlayerState は作り直さない。作者が登録した Changed と PreviewReceived を新しいバックエンドで受け続ける。
-            // PlayerState は前のバックエンドから外すのも RebindPreview が受け持つ。
+            // Locale・PlayerState・Shop は作り直さない。作者が登録した Changed・PreviewReceived・PendingReceived を
+            // 新しいバックエンドで受け続ける。前のバックエンドから外すのは RebindPreview と RebindPending が受け持つ。
             locale?.Rebind();
             playerState?.RebindPreview();
+            shop?.RebindPending();
         }
 
         internal static Task<GRushResult<string>> CallAsync(string method, string paramsJson)

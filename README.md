@@ -7,7 +7,7 @@ GameRush の GameAPI を Unity から呼ぶための UPM パッケージ。ビ�
 Package Manager の `Add package from git URL...` に次を入れる。
 
 ```text
-https://github.com/gamerush-jp/grush-sdk-unity.git#v1.16.0
+https://github.com/gamerush-jp/grush-sdk-unity.git#v1.17.0
 ```
 
 Unity 2021.3 以降。ビルドターゲットは WebGL。
@@ -137,6 +137,40 @@ var mine = await GRush.Trade.MineAsync();
 
 `AcceptAsync` は先に取られた・期限切れ・取り下げ・見えない出品をエラーにせず、`Outcome`（`Matched` / `Taken` / `Expired` / `Cancelled` / `NotFound`）で返す。`Trade` は `Matched` のときだけ入る（`HasTrade`）。同じ取引への再送は `Matched`。`GRushTradeOptions.To` に疑似 ID を入れると指名の出品になり、`ExpiresInSec` は 600〜604800（0 なら 3 日）。受付中の出品は 1 人 10 件まで。`ListAsync` は他人の公開の出品と自分宛ての指名の出品のうち、受付中のもの（新しい順）。`ReportAsync(tradeId)` は GameRush が確認を出し、承諾されたら `true`。通報すると出品者をブロックする。`GRush.IsTradeAvailable` が `false`（`protocolVersion` 7 未満）ではどれも `Unsupported`。
 
+### 作者アイテム販売
+
+```csharp
+// 起動時と、決済から戻って付与が届いた合図のときに Pending を読む。
+GRush.Shop.PendingReceived += sku => ApplyPendingGrants();
+ApplyPendingGrants();
+
+async void ApplyPendingGrants()
+{
+    var pending = await GRush.Shop.PendingAsync();
+    if (!pending.Ok || pending.Value.Length == 0) return;
+    foreach (var grant in pending.Value) save.AddItem(grant.Sku);
+    save.Write(); // 反映して保存してから Ack する
+    await GRush.Shop.AckAsync(System.Array.ConvertAll(pending.Value, grant => grant.Id));
+}
+
+var catalog = await GRush.Shop.ProductsAsync();
+if (catalog.Ok && catalog.Value.Enabled)
+{
+    save.Write(); // Redirecting が返るとページはすぐ決済画面へ移るので、先に保存する
+    var bought = await GRush.Shop.PurchaseAsync(catalog.Value.Products[0].Sku);
+}
+```
+
+作者が登録した商品をプレイヤーが買い、届いた付与をゲームがセーブへ反映する。商品名と価格（`PriceJpy`、円）は作者が Studio か API キーで登録し、ゲームは `ProductsAsync` で読む。
+
+- 購入できるのは Web の GameRush だけ。アプリと LINE では `PurchaseAsync` が `Unsupported`、`ProductsAsync` は `Enabled` が `false` で `Products` は空。`PendingAsync`・`AckAsync`・`OwnedAsync` はどの面でも動く
+- `PurchaseAsync(sku)` が `Redirecting` を返すと、ページはすぐ決済画面へ移る。**ゲームは `PurchaseAsync` を呼ぶ前にセーブしておく。** ほかに `Cancelled`（やめた）と `AlreadyOwned`（もう持っている）が返る。`sku` が `^[a-z0-9][a-z0-9_.-]{0,63}$` でなければ送らずに `InvalidParams`。GameRush は決済の確認を最大 10 分待つ
+- 付与は `AckAsync` するまで `PendingAsync` に残る。アイテムをセーブに反映して保存してから `AckAsync` する（渡せる id は 1〜100 件の付与 ID で、合わなければ送らずに `InvalidParams`）。起動時にも `PendingAsync` を読む
+- `PendingReceived` は決済から戻って付与が届いたときに、買った `sku` を引数に次の `Update` で呼ばれる。購読より前に届いた合図は購読したときに1回だけ渡る。購読が1つ以上あるあいだだけ GameRush から受け取る
+- `OwnedAsync` は Ack 済みを含むすべての付与（`GRushShopGrant.Acked`）を返す
+- ゲームの中での使用は改ざんを防げない。GameRush が保証するのは、払った人に付与が届くことまで
+- 呼び出しの間隔には上限があり、超えると `RateLimited`。`GRush.IsShopAvailable` が `false`（`protocolVersion` 12 未満）ではどれも `Unsupported` で、`PendingReceived` は呼ばれない
+
 ### 共有
 
 ```csharp
@@ -260,7 +294,7 @@ opponent.Received += message => opponent.Send(reply, GRushChannel.Unreliable, GR
 
 共有のモックは確認シートを出さず、`GRushMock.ShareStatus`（既定 `Opened`）を返す。`GRushMock.ShareAvailable = false` で共有できない環境を試せる。起動パラメータは GameRush と同じ制限で確かめ、合わなければ `InvalidParams`。本文と画像の検査はしない。
 
-アナリティクスのモックは、GameRush と同じ検査をして、通ったイベントを1件ずつ Console に出し、直近の 200 件を `GRushMock.AnalyticsEvents`（GameRush へ渡すのと同じ形の JSON の配列）で返す（`GRushMock.Reset()` で空になる）。弾いたイベントは、GameRush と同じく理由ごとに1回だけ警告する（`GRushMock.Reset()` でまた出る）。どこへも送らない。前面に出るまでの 30 件の溜め・本体の上限・同じステップを最初の1回だけ残す扱い・セッションあたりの上限は再現しないので、モックでは `true` の分がすべて記録に残る。モックが名乗る `protocolVersion` は 11。
+アナリティクスのモックは、GameRush と同じ検査をして、通ったイベントを1件ずつ Console に出し、直近の 200 件を `GRushMock.AnalyticsEvents`（GameRush へ渡すのと同じ形の JSON の配列）で返す（`GRushMock.Reset()` で空になる）。弾いたイベントは、GameRush と同じく理由ごとに1回だけ警告する（`GRushMock.Reset()` でまた出る）。どこへも送らない。前面に出るまでの 30 件の溜め・本体の上限・同じステップを最初の1回だけ残す扱い・セッションあたりの上限は再現しないので、モックでは `true` の分がすべて記録に残る。モックが名乗る `protocolVersion` は 12。
 
 相手探し・受信箱・交換所のモックは、`GRushMock.Rivals` の 3 人の相手を持つ。相手はそれぞれ rating 付きの公開プレイヤー状態を持ち、届いたメッセージを同じ kind と payload で送り返す。はじめと `GRushMock.Reset()` の後は、最初の相手からのメッセージ1通と、相手の受付中の出品を2件持つ。payload・offer・want・give の形、`operationId` での冪等、受付中の出品の上限、受諾の `Outcome`、`Pending` と Ack は GameRush と同じ規則で動く。通報を承諾すると（`GRushMock.ConfirmInboxReport` / `ConfirmTradeReport`、既定 `true`）相手をブロックし、その相手のメッセージと出品は見えなくなる。プレイヤー状態の通報は伏せていない状態にだけ届き、確認の答えを `GRushMock.ConfirmPlayerStateReport`（既定 `true`）で決める。
 
@@ -271,6 +305,13 @@ GRushMockTrades.Accept(myTradeId, "{\"item\":\"gem\"}"); // 相手が受けて�
 GRushMockTrades.Expire(listingId);
 GRushMockPlayerStates.Define("custom-rival", "{\"level\":3}", false, 1300);
 GRushMockPlayerStates.Preview(GRushMock.Rivals[0], "{\"level\":3}"); // 確認用の表示の写しを渡す
+```
+
+作者アイテム販売のモックは、`GRushMockShop.Define(sku, name, priceJpy)` で置いた商品を `ProductsAsync` で返す。`PurchaseAsync` は決済画面へ移らず、すぐに付与を `Pending` に積んで `Redirecting` を返し、次の `Update` で `PendingReceived` を呼ぶ。置いていない sku は `InvalidParams`。`GRushMock.ShopPurchaseStatus` を `Cancelled` か `AlreadyOwned` にすると、付与を積まずにその結果を返す。`GRushMock.ShopEnabled = false` でアプリと LINE と同じ（`Enabled` が `false` の空、`PurchaseAsync` は `Unsupported`）になる。`GRushMockShop.Grant(sku)` は購入を経ずに付与を積む。sku と Ack の id は GameRush と同じ形で確かめる。呼び出しの間隔の上限は再現しない。`GRushMock.Reset()` で付与は消え、置いた商品は残る（`GRushMockShop.Clear()` で消す）。
+
+```csharp
+GRushMockShop.Define("gem_pack", "ジェム 100 個", 120);
+GRushMockShop.Grant("gem_pack"); // 購入を経ずに付与を積み、PendingReceived を呼ぶ
 ```
 
 確認用の表示のモックは `GRushMockPlayerStates.Preview(pseudoId, payloadJson)` で写しを1つ渡し、次の `Update` で `PreviewReceived` が呼ばれる。`Preview(pseudoId, payloadJson, revision, rating)` で revision と rating を決められる（既定は revision 1、rating は無し。`null` なら rating は無し）。updatedAt は呼んだ時刻（UTC）。購読が無いうちに渡した写しは、次に購読したときに1回だけ届く。疑似 ID が空・payload が JSON オブジェクトでない・revision が負・rating が NaN か無限大のときは何もしない。`GRushMockPlayerStates.Reset()` で、まだ届いていない写しを捨てる。

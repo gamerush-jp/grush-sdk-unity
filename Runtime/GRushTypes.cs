@@ -379,6 +379,60 @@ namespace GRushSdk
         public int ExpiresInSec;
     }
 
+    /// <summary>作者が登録した販売中の商品。名前と価格は作者が Studio か API キーで決める。</summary>
+    [Serializable]
+    public struct GRushShopProduct
+    {
+        /// <summary>商品の識別子（<c>^[a-z0-9][a-z0-9_.-]{0,63}$</c>）。</summary>
+        public string Sku;
+
+        public string Name;
+
+        /// <summary>税込みの価格（円）。</summary>
+        public int PriceJpy;
+    }
+
+    [Serializable]
+    public struct GRushShopCatalog
+    {
+        /// <summary>
+        /// この面で買えるか。アプリと LINE では false で、<see cref="Products"/> は空。
+        /// </summary>
+        public bool Enabled;
+
+        public GRushShopProduct[] Products;
+    }
+
+    public enum GRushShopPurchaseStatus
+    {
+        /// <summary>決済画面へ移る。ページはすぐ離れる。</summary>
+        Redirecting,
+
+        /// <summary>プレイヤーが購入をやめた。</summary>
+        Cancelled,
+
+        /// <summary>もう持っている。</summary>
+        AlreadyOwned,
+    }
+
+    /// <summary>
+    /// 購入で届いた付与。<see cref="Acked"/> が false のあいだは <c>Shop.PendingAsync</c> に残る。
+    /// </summary>
+    [Serializable]
+    public struct GRushShopGrant
+    {
+        /// <summary>付与の ID（UUID）。<c>Shop.AckAsync</c> に渡す。</summary>
+        public string Id;
+
+        public string Sku;
+
+        /// <summary>付与した日時（ISO 8601）。</summary>
+        public string CreatedAt;
+
+        /// <summary>Ack 済みか。<c>Shop.PendingAsync</c> の付与では常に false。</summary>
+        public bool Acked;
+    }
+
     public static class GRushChannels
     {
         public const string Reliable = "reliable";
