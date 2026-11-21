@@ -403,6 +403,26 @@ namespace GRushSdk
         public GRushShopProduct[] Products;
     }
 
+    /// <summary>部屋への招待（<c>Net.InviteAsync</c>）の結果。</summary>
+    public enum GRushInviteStatus
+    {
+        /// <summary>送らずにシートを閉じた。</summary>
+        Cancelled,
+
+        /// <summary>1人以上へ招待を送った。</summary>
+        Sent,
+    }
+
+    /// <summary>部屋への招待の結果。誰へ送ったかはゲームへ渡らない。</summary>
+    [Serializable]
+    public struct GRushInviteResult
+    {
+        public GRushInviteStatus Status;
+
+        /// <summary>送った人数。<see cref="GRushInviteStatus.Cancelled"/> では 0。</summary>
+        public int Count;
+    }
+
     /// <summary>購入の結果。知らない値は <see cref="Unknown"/> になる。</summary>
     public enum GRushShopPurchaseStatus
     {

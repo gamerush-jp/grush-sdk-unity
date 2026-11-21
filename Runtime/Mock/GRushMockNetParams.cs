@@ -13,6 +13,9 @@ namespace GRushSdk
         public const string InvalidRoomConfigMessage = "Invalid maxPeers or topology.";
         public const string RoomMismatchMessage = "The room exists with a different maxPeers or topology.";
 
+        // 1回の招待で選べる人数の上限。
+        public const int InviteMaxRecipients = 30;
+
         // 定員を渡さない join の定員。
         public const int DefaultMaxPeers = 8;
 
@@ -29,6 +32,17 @@ namespace GRushSdk
             @"^[A-Za-z0-9]{4,12}\z",
             RegexOptions.CultureInvariant
         );
+
+        /// <summary>
+        /// 招待の部屋として渡せるか。GameRush は、mode と部屋コードが join の規則に合う招待だけをゲームへ渡す。
+        /// </summary>
+        public static bool IsInviteRoom(string mode, string roomCode)
+        {
+            return mode != null
+                && roomCode != null
+                && ModePattern.IsMatch(mode)
+                && RoomCodePattern.IsMatch(roomCode);
+        }
 
         /// <summary>
         /// 通るなら null、弾くならエラーの文言を返す。SDK は空の mode を "default" に、空の部屋コードを

@@ -41,6 +41,11 @@ namespace GRushSdk
         /// <summary>作者アイテム販売（<see cref="Shop"/>）に要る版数。</summary>
         public const int ShopProtocolVersion = 12;
 
+        /// <summary>
+        /// 部屋への招待（<c>Net.InviteAsync</c>）と、招待から開いたときの部屋（<see cref="GRushLaunch.Invite"/>）に要る版数。
+        /// </summary>
+        public const int InviteProtocolVersion = 13;
+
         public const int MaxMessageBytes = 8 * 1024;
 
         private static IGRushBackend backend;
@@ -145,6 +150,15 @@ namespace GRushSdk
         public static bool IsShopAvailable
         {
             get { return IsAvailable && Backend.ProtocolVersion >= ShopProtocolVersion; }
+        }
+
+        /// <summary>
+        /// 部屋への招待を呼べるか（<see cref="InviteProtocolVersion"/>）。古いランタイムと GameRush の外では false。
+        /// true でも、招待のシートを出せない面（埋め込みなど）では <c>Net.InviteAsync</c> が Unsupported になる。
+        /// </summary>
+        public static bool IsInviteAvailable
+        {
+            get { return IsAvailable && Backend.ProtocolVersion >= InviteProtocolVersion; }
         }
 
         public static bool IsAvailable

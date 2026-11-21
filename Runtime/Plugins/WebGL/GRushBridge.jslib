@@ -37,6 +37,7 @@ var GRushBridgeLibrary = {
     },
 
     // JsonUtility cannot read a dictionary, so the params travel as an array of key and value pairs.
+    // invite is the room an invite opened the game for, and null otherwise or on older runtimes.
     launchEntries: function (launch) {
       var params = launch && launch.params;
       var entries = [];
@@ -45,7 +46,12 @@ var GRushBridgeLibrary = {
           if (typeof params[key] === "string") entries.push({ key: key, value: params[key] });
         });
       }
-      return { entries: entries };
+      var invite = launch && launch.invite;
+      var room =
+        invite && typeof invite.mode === "string" && typeof invite.roomCode === "string"
+          ? { mode: invite.mode, roomCode: invite.roomCode }
+          : null;
+      return { entries: entries, invite: room };
     },
 
     respond: function (requestId, ok, text) {
@@ -208,6 +214,7 @@ var GRushBridgeLibrary = {
       if (method === "player.requestProfile" && player) return player.requestProfile();
       if (method === "player.revokeProfile" && player) return player.revokeProfile();
       if (method === "net.join" && net) return net.join(params).then(GRushBridge.bind);
+      if (method === "net.invite" && net && typeof net.invite === "function") return net.invite();
       if (method === "net.leave" && net) {
         if (GRushBridge.unbind) GRushBridge.unbind();
         return net.room ? net.room.leave() : Promise.resolve(null);

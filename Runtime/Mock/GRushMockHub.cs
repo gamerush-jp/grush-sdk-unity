@@ -401,6 +401,12 @@ namespace GRushSdk
             return !members.Exists(member => member.Index >= capacity);
         }
 
+        /// <summary>今の部屋の空いた席の数（定員から、自分を含む今の人数を引いた数）。</summary>
+        public int FreeSeats
+        {
+            get { return Math.Max(0, maxPeers - members.Count); }
+        }
+
         private int NextFreeIndex()
         {
             for (var index = 0; index < maxPeers; index++)

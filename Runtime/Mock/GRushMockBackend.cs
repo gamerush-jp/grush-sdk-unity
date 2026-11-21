@@ -26,10 +26,10 @@ namespace GRushSdk
             get { return true; }
         }
 
-        // モックが実装している一番新しい機能（作者アイテム販売）の版数。
+        // モックが実装している一番新しい機能（部屋への招待）の版数。
         public int ProtocolVersion
         {
-            get { return GRush.ShopProtocolVersion; }
+            get { return GRush.InviteProtocolVersion; }
         }
 
         public bool IsAnalyticsAvailable
@@ -149,7 +149,7 @@ namespace GRushSdk
             return LaunchJson();
         }
 
-        // Web の層と同じく entries の配列で渡す。
+        // Web の層と同じく entries の配列で渡す。招待の部屋は、GameRush と同じく形が合うときだけ載せる。
         private static string LaunchJson()
         {
             var builder = new System.Text.StringBuilder("{\"entries\":[");
@@ -171,7 +171,14 @@ namespace GRushSdk
                     builder.Append(",\"value\":").Append(GRushWire.Escape(pair.Value)).Append('}');
                 }
             }
-            return builder.Append("]}").ToString();
+            builder.Append("]");
+            if (GRushMockNetParams.IsInviteRoom(GRushMock.LaunchInviteMode, GRushMock.LaunchInviteRoomCode))
+            {
+                builder.Append(",\"invite\":{\"mode\":").Append(GRushWire.Escape(GRushMock.LaunchInviteMode));
+                builder.Append(",\"roomCode\":").Append(GRushWire.Escape(GRushMock.LaunchInviteRoomCode));
+                builder.Append('}');
+            }
+            return builder.Append('}').ToString();
         }
 
         public string LocaleCurrentJson()
@@ -260,6 +267,8 @@ namespace GRushSdk
                     return GRushRpcResponse.Success(PlayerJson(false));
                 case "net.join":
                     return Join(paramsJson);
+                case "net.invite":
+                    return Invite();
                 case "net.leave":
                     GRushMockHub.Instance.Leave(localIndex);
                     localIndex = -1;
@@ -467,6 +476,29 @@ namespace GRushSdk
             }
             Consented = true;
             return GRushRpcResponse.Success(PlayerJson(true));
+        }
+
+        // GameRush の招待のシートの代わり。偽のフレンドを GRushMock.InviteCount 人選んで送ったことにする。どこへも送らない。
+        private GRushRpcResponse Invite()
+        {
+            if (localIndex < 0)
+            {
+                return GRushRpcResponse.Failure(GRushErrorCode.Unavailable, "Join a room before inviting.");
+            }
+            if (!GRushMock.SignedIn)
+            {
+                return GRushRpcResponse.Failure(GRushErrorCode.SignInRequired, "Sign-in is required to invite.");
+            }
+            var count = Math.Min(
+                Math.Min(GRushMock.InviteCount, GRushMockHub.Instance.FreeSeats),
+                GRushMockNetParams.InviteMaxRecipients
+            );
+            if (GRushMock.InviteStatus != GRushInviteStatus.Sent || count <= 0)
+            {
+                return GRushRpcResponse.Success("{\"status\":\"cancelled\",\"count\":0}");
+            }
+            Debug.Log("[GRushMock] invited " + count + " friend(s) to the room");
+            return GRushRpcResponse.Success("{\"status\":\"sent\",\"count\":" + count + "}");
         }
 
         // GameRush と同じく、今の部屋を先に抜け、失敗しても戻らない。形の誤りはゲームが直すので InvalidParams、

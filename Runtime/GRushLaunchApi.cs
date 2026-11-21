@@ -19,15 +19,24 @@ namespace GRushSdk
         private static readonly IReadOnlyDictionary<string, string> Empty =
             new ReadOnlyDictionary<string, string>(new Dictionary<string, string>());
 
-        internal GRushLaunch(IDictionary<string, string> source)
+        internal GRushLaunch(IDictionary<string, string> source, GRushLaunchInvite invite)
         {
             Params = source == null || source.Count == 0
                 ? Empty
                 : new ReadOnlyDictionary<string, string>(new Dictionary<string, string>(source));
+            Invite = invite;
         }
 
         /// <summary>起動パラメータの全部。パラメータの無い起動では空。</summary>
         public IReadOnlyDictionary<string, string> Params { get; private set; }
+
+        /// <summary>
+        /// 招待（<c>Net.InviteAsync</c>）から開いたときの、招いた人の部屋。
+        /// <c>Net.JoinAsync(Invite.Mode, Invite.RoomCode)</c> でその部屋へ入る。
+        /// 招待の通知から開いたスライドだけが持ち、ほかは null。<see cref="GRush.IsInviteAvailable"/> が false の
+        /// 古いランタイムでも null。
+        /// </summary>
+        public GRushLaunchInvite Invite { get; private set; }
 
         /// <summary><paramref name="key"/>（<c>gp.</c> を除いた名前）の値を読む。無ければ false。</summary>
         public bool TryGet(string key, out string value)
@@ -41,6 +50,22 @@ namespace GRushSdk
         }
     }
 
+    /// <summary>招待から開いたときの部屋。<c>Net.JoinAsync(Mode, RoomCode)</c> へそのまま渡せる。</summary>
+    public sealed class GRushLaunchInvite
+    {
+        internal GRushLaunchInvite(string mode, string roomCode)
+        {
+            Mode = mode;
+            RoomCode = roomCode;
+        }
+
+        /// <summary>部屋を分ける名前（join の mode）。</summary>
+        public string Mode { get; private set; }
+
+        /// <summary>部屋コード。</summary>
+        public string RoomCode { get; private set; }
+    }
+
     public interface IGRushLaunchBackend
     {
         string LaunchCurrentJson();
@@ -51,6 +76,15 @@ namespace GRushSdk
     internal class GRushLaunchWire
     {
         public GRushLaunchEntryWire[] entries;
+        public GRushLaunchInviteWire invite;
+    }
+
+    // JsonUtility は無い項目も空のオブジェクトとして読むので、mode と roomCode の両方があるときだけ招待とみなす。
+    [Serializable]
+    internal class GRushLaunchInviteWire
+    {
+        public string mode;
+        public string roomCode;
     }
 
     [Serializable]
@@ -121,7 +155,13 @@ namespace GRushSdk
                     source[entry.key] = entry.value;
                 }
             }
-            return new GRushLaunch(source);
+            var invite = wire.invite;
+            var hasInvite =
+                invite != null && !string.IsNullOrEmpty(invite.mode) && !string.IsNullOrEmpty(invite.roomCode);
+            return new GRushLaunch(
+                source,
+                hasInvite ? new GRushLaunchInvite(invite.mode, invite.roomCode) : null
+            );
         }
     }
 }

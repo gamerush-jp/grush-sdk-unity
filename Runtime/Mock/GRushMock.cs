@@ -41,6 +41,28 @@ namespace GRushSdk
         /// </summary>
         public static Dictionary<string, string> LaunchParams = new Dictionary<string, string>();
 
+        /// <summary>
+        /// <see cref="GRush.Launch"/> の <see cref="GRushLaunch.Invite"/> に入れる招待の部屋の mode。
+        /// <see cref="LaunchInviteRoomCode"/> と両方を入れると、招待から開いたときを試せる。
+        /// 形が join の規則に合わなければ招待なし（null）として返す。<see cref="Reset"/> で null になる。
+        /// </summary>
+        public static string LaunchInviteMode = null;
+
+        /// <summary><see cref="GRushLaunch.Invite"/> に入れる招待の部屋の部屋コード。<see cref="Reset"/> で null になる。</summary>
+        public static string LaunchInviteRoomCode = null;
+
+        /// <summary>
+        /// <c>Net.InviteAsync</c> の答え。Cancelled にすると、送らずにシートを閉じたことにする。
+        /// 部屋に居なければ Unavailable、<see cref="SignedIn"/> が false なら SignInRequired で、この設定によらない。
+        /// </summary>
+        public static GRushInviteStatus InviteStatus = GRushInviteStatus.Sent;
+
+        /// <summary>
+        /// <c>Net.InviteAsync</c> で偽のフレンドへ送ったことにする人数。部屋の空いた席の数と 30 の小さいほうまでに絞り、
+        /// 0 になれば Cancelled を返す。
+        /// </summary>
+        public static int InviteCount = 1;
+
         private static readonly string[] rivals = { "mock-rival-1", "mock-rival-2", "mock-rival-3" };
 
         /// <summary>
@@ -104,12 +126,16 @@ namespace GRushSdk
         }
 
         /// <summary>
-        /// 表示言語・起動パラメータ・部屋・分析イベント・受信箱・交換所（通報によるブロックを含む）・
+        /// 表示言語・起動パラメータと招待の部屋・招待の答え・部屋・分析イベント・受信箱・交換所（通報によるブロックを含む）・
         /// 作者アイテム販売の付与をはじめの状態へ戻す。<see cref="GRushMockShop.Define"/> で置いた商品は残る。
         /// </summary>
         public static void Reset()
         {
             LaunchParams = new Dictionary<string, string>();
+            LaunchInviteMode = null;
+            LaunchInviteRoomCode = null;
+            InviteStatus = GRushInviteStatus.Sent;
+            InviteCount = 1;
             GRushMockAnalytics.Reset();
             GRushMockLocale.Reset();
             GRushMockHub.Reset();

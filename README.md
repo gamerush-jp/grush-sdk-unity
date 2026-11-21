@@ -7,7 +7,7 @@ GameRush の GameAPI を Unity から呼ぶための UPM パッケージ。ビ�
 Package Manager の `Add package from git URL...` に次を入れる。
 
 ```text
-https://github.com/gamerush-jp/grush-sdk-unity.git#v1.17.0
+https://github.com/gamerush-jp/grush-sdk-unity.git#v1.18.0
 ```
 
 Unity 2021.3 以降。ビルドターゲットは WebGL。
@@ -56,6 +56,32 @@ var joined = await GRush.Net.JoinAsync(new GRushJoinOptions
 1 人が送れるのは、8 人以下の `Mesh` で毎秒 30 通、9 人以上の `Mesh` と `Hub` のホスト以外で毎秒 20 通。`Hub` のホストは人数に応じて増える。超えた分は `Error`（`Code` は `"rateLimited"`）で捨てられる。
 
 `MaxPeers`・`Topology`・`HostSelection` のどれかを渡すと `GRush.RoomConfigProtocolVersion`（11）が要り、`GRush.IsRoomConfigAvailable` が `false` の GameRush では入らずに `Unsupported` を返す。GameRush のアプリ側が古いと、定員と形を無視して 8 人の `Mesh` の部屋へ入る。そのとき `TargetRoomSize` が 9 以上なら `InvalidParams`。入った部屋の実際の定員と形は `GRushRoom.MaxPeers` と `GRushRoom.Topology` で確かめる。`protocolVersion` 11 未満の GameRush と、定員と形を伝えない部屋では `8` と `Mesh`。
+
+### フレンドを部屋へ招く
+
+```csharp
+// 部屋に入った後、「フレンドを招く」ボタンから
+var invited = await GRush.Net.InviteAsync();
+if (invited.Ok && invited.Value.Status == GRushInviteStatus.Sent)
+{
+    ShowToast(invited.Value.Count + " 人を招待しました");
+}
+
+// 招待から開いたときは、起動パラメータに部屋が入っている
+var launched = await GRush.Launch.GetAsync();
+if (launched.Ok && launched.Value.Invite != null)
+{
+    var invite = launched.Value.Invite;
+    var joined = await GRush.Net.JoinAsync(invite.Mode, invite.RoomCode);
+    // 招いた人が抜けた・満員・招待の期限（15 分）が切れたときは Unavailable
+}
+```
+
+`GRush.Net.InviteAsync()` は引数を取らない。GameRush が相互フォローの相手を選ぶシートを出し、今入っている部屋へ招く。ゲームは部屋も相手も選べず、受け取るのは `GRushInviteResult` の `Status`（1人以上へ送ったら `Sent`、送らずに閉じたら `Cancelled`）と `Count`（送った人数。`Cancelled` では 0）だけ。選べるのは部屋の空いた席の数と 30 人の小さいほうまで。シートを出している間もゲームは止まらず、部屋の相手との対戦は続く。
+
+部屋に居なければ `Unavailable`、ゲストなら `SignInRequired`、続けて呼ぶと `RateLimited`。シートを出せない面（埋め込みなど）と、`GRush.IsInviteAvailable` が `false`（`protocolVersion` が `GRush.InviteProtocolVersion`（13）未満）の GameRush と GameRush の外では `Unsupported`。
+
+招かれた人が通知から開くと、そのゲームの `GRushLaunch.Invite` に `Mode` と `RoomCode` が入る（ほかは `null`）。そのまま `JoinAsync(Mode, RoomCode)` に渡すと招いた人の部屋へ入る。定員と形は部屋のものになるので、`GRushJoinOptions` で渡さなくてよい。
 
 `GRush` は例外を投げない。GameRush の外で動かした場合も `GRushResult<T>.Ok` が `false`、`Code` が `GRushErrorCode.Unsupported` になるだけで、ゲームは止まらない（アナリティクスは `bool` を返す。下記）。
 
@@ -228,7 +254,7 @@ if (result.Ok && result.Value.TryGet("item", out var item) && OwnsItem(item))
 
 **値を信用しない。** リンクは誰でも作れる。アイテムが存在するか・プレイヤーが持っているか・ステージが解放済みかをゲームの側で確かめ、確かめられなければ無視する。
 
-`GRushLaunch` は `Params`（`IReadOnlyDictionary<string, string>`）と `TryGet(key, out value)` を持つ。キーは英数字と `_-` で 32 文字まで（`__proto__` は使えない）、値は英数字と `._~:,-` で 128 文字まで（空も可）、8 個まで。形の合わない項目と、2回書かれたキーは GameRush が落とし、8 個を超えたら全部落とす。渡るのは、プレイヤーが最初に開いたスライドのゲームだけで、別のゲームへスワイプして戻ったときは `Params` が空。フィードではページを読み直すと空になるが、単体表示や埋め込みでは読み直すと同じ値がまた渡ることがあるので、何度渡っても困らないように書く。`GetAsync` は GameRush から届くまで待ち、`GRush.Launch.Current` は届く前なら `null`。`GRush.IsLaunchAvailable` が `false`（`protocolVersion` 8 未満）と GameRush の外では `GetAsync` が `Unsupported`、`Current` が `null`。GameRush のアプリ側が古くて答えられないときは、`Unsupported` ではなく空の `Params` が返る。
+`GRushLaunch` は `Params`（`IReadOnlyDictionary<string, string>`）と `TryGet(key, out value)` と、招待から開いたときの部屋 `Invite`（上の「フレンドを部屋へ招く」。ほかは `null`）を持つ。キーは英数字と `_-` で 32 文字まで（`__proto__` は使えない）、値は英数字と `._~:,-` で 128 文字まで（空も可）、8 個まで。形の合わない項目と、2回書かれたキーは GameRush が落とし、8 個を超えたら全部落とす。渡るのは、プレイヤーが最初に開いたスライドのゲームだけで、別のゲームへスワイプして戻ったときは `Params` が空。フィードではページを読み直すと空になるが、単体表示や埋め込みでは読み直すと同じ値がまた渡ることがあるので、何度渡っても困らないように書く。`GetAsync` は GameRush から届くまで待ち、`GRush.Launch.Current` は届く前なら `null`。`GRush.IsLaunchAvailable` が `false`（`protocolVersion` 8 未満）と GameRush の外では `GetAsync` が `Unsupported`、`Current` が `null`。GameRush のアプリ側が古くて答えられないときは、`Unsupported` ではなく空の `Params` が返る。
 
 ### アナリティクス
 
@@ -298,9 +324,17 @@ opponent.Received += message => opponent.Send(reply, GRushChannel.Unreliable, GR
 
 起動パラメータのモックは `GRushMock.LaunchParams`（既定は空。例 `GRushMock.LaunchParams["item"] = "sword";`）をそのまま返す。GameRush の制限では確かめない。`GRushMock.Reset()` で空になる。
 
+招待のモックはシートを出さず、偽のフレンドへ送ったことにする。`GRush.Net.InviteAsync` は、部屋に居なければ `Unavailable`、`GRushMock.SignedIn = false` なら `SignInRequired` を返し、ほかは `GRushMock.InviteCount`（既定 1）人へ送ったことにして `Sent` を返す。人数は部屋の空いた席の数と 30 の小さいほうまでに絞り、0 になれば `Cancelled`。`GRushMock.InviteStatus = GRushInviteStatus.Cancelled` で送らずに閉じたことにする。招待から開いたときを試すには、`GRushMock.LaunchInviteMode` と `GRushMock.LaunchInviteRoomCode` の両方を入れる。`GRushLaunch.Invite` に載り、形が join の規則に合わなければ `null` になる。どれも `GRushMock.Reset()` で既定に戻る。
+
+```csharp
+GRushMock.LaunchInviteMode = "duel";
+GRushMock.LaunchInviteRoomCode = "ABCD23"; // GRush.Launch.Current.Invite に載る
+GRushMock.InviteCount = 2;                  // InviteAsync が Sent・Count 2 を返す
+```
+
 共有のモックは確認シートを出さず、`GRushMock.ShareStatus`（既定 `Opened`）を返す。`GRushMock.ShareAvailable = false` で共有できない環境を試せる。起動パラメータは GameRush と同じ制限で確かめ、合わなければ `InvalidParams`。本文と画像の検査はしない。
 
-アナリティクスのモックは、GameRush と同じ検査をして、通ったイベントを1件ずつ Console に出し、直近の 200 件を `GRushMock.AnalyticsEvents`（GameRush へ渡すのと同じ形の JSON の配列）で返す（`GRushMock.Reset()` で空になる）。弾いたイベントは、GameRush と同じく理由ごとに1回だけ警告する（`GRushMock.Reset()` でまた出る）。どこへも送らない。前面に出るまでの 30 件の溜め・本体の上限・同じステップを最初の1回だけ残す扱い・セッションあたりの上限は再現しないので、モックでは `true` の分がすべて記録に残る。モックが名乗る `protocolVersion` は 12。
+アナリティクスのモックは、GameRush と同じ検査をして、通ったイベントを1件ずつ Console に出し、直近の 200 件を `GRushMock.AnalyticsEvents`（GameRush へ渡すのと同じ形の JSON の配列）で返す（`GRushMock.Reset()` で空になる）。弾いたイベントは、GameRush と同じく理由ごとに1回だけ警告する（`GRushMock.Reset()` でまた出る）。どこへも送らない。前面に出るまでの 30 件の溜め・本体の上限・同じステップを最初の1回だけ残す扱い・セッションあたりの上限は再現しないので、モックでは `true` の分がすべて記録に残る。モックが名乗る `protocolVersion` は 13。
 
 相手探し・受信箱・交換所のモックは、`GRushMock.Rivals` の 3 人の相手を持つ。相手はそれぞれ rating 付きの公開プレイヤー状態を持ち、届いたメッセージを同じ kind と payload で送り返す。はじめと `GRushMock.Reset()` の後は、最初の相手からのメッセージ1通と、相手の受付中の出品を2件持つ。payload・offer・want・give の形、`operationId` での冪等、受付中の出品の上限、受諾の `Outcome`、`Pending` と Ack は GameRush と同じ規則で動く。通報を承諾すると（`GRushMock.ConfirmInboxReport` / `ConfirmTradeReport`、既定 `true`）相手をブロックし、その相手のメッセージと出品は見えなくなる。プレイヤー状態の通報は伏せていない状態にだけ届き、確認の答えを `GRushMock.ConfirmPlayerStateReport`（既定 `true`）で決める。
 

@@ -1,7 +1,15 @@
+using System;
 using System.Threading.Tasks;
 
 namespace GRushSdk
 {
+    [Serializable]
+    internal class GRushInviteResultWire
+    {
+        public string status;
+        public int count;
+    }
+
     public sealed class GRushNetApi
     {
         private GRushRoom room;
@@ -97,6 +105,46 @@ namespace GRushSdk
             }
             room = new GRushRoom(this, wire);
             return GRushResult<GRushRoom>.Success(room);
+        }
+
+        /// <summary>
+        /// 今いる部屋へ、相互フォローの相手を招く。GameRush が相手を選ぶシートを出し、プレイヤーが送るか閉じると返る。
+        /// 招く部屋は今入っている部屋で、ゲームは部屋も相手も選べず、送った人数だけを受け取る。
+        /// 選べるのは部屋の空いた席の数と 30 人の小さいほうまで。
+        /// 招かれた人が通知から開くと、<see cref="GRushLaunch.Invite"/> にこの部屋が入る。
+        ///
+        /// シートを出している間もゲームは止まらず、部屋の相手との対戦は続く。
+        /// 部屋に居なければ Unavailable、ゲストなら SignInRequired、続けて呼ぶと RateLimited。
+        /// シートを出せない面（埋め込みなど）と、<see cref="GRush.IsInviteAvailable"/> が false の古いランタイムと
+        /// GameRush の外では Unsupported。
+        /// </summary>
+        public async Task<GRushResult<GRushInviteResult>> InviteAsync()
+        {
+            if (!GRush.IsInviteAvailable)
+            {
+                return GRushResult<GRushInviteResult>.Unsupported();
+            }
+            var response = await GRush.CallAsync("net.invite", null);
+            if (!response.Ok)
+            {
+                return GRushResult<GRushInviteResult>.Failure(response.Code, response.Message);
+            }
+            var wire = GRushWire.Parse<GRushInviteResultWire>(response.Value);
+            if (wire == null)
+            {
+                return GRushResult<GRushInviteResult>.Failure(
+                    GRushErrorCode.Internal,
+                    "GameRush returned an unreadable invite result."
+                );
+            }
+            var sent = wire.status == "sent" && wire.count > 0;
+            return GRushResult<GRushInviteResult>.Success(
+                new GRushInviteResult
+                {
+                    Status = sent ? GRushInviteStatus.Sent : GRushInviteStatus.Cancelled,
+                    Count = sent ? wire.count : 0,
+                }
+            );
         }
 
         internal void Forget(GRushRoom closed)
