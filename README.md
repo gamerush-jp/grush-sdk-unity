@@ -79,9 +79,9 @@ if (launched.Ok && launched.Value.Invite != null)
 
 `GRush.Net.InviteAsync()` は引数を取らない。GameRush が相互フォローの相手を選ぶシートを出し、今入っている部屋へ招く。ゲームは部屋も相手も選べず、受け取るのは `GRushInviteResult` の `Status`（1人以上へ送ったら `Sent`、送らずに閉じたら `Cancelled`）と `Count`（送った人数。`Cancelled` では 0）だけ。選べるのは部屋の空いた席の数と 30 人の小さいほうまで。シートを出している間もゲームは止まらず、部屋の相手との対戦は続く。
 
-部屋に居なければ `Unavailable`、ゲストなら `SignInRequired`、続けて呼ぶと `RateLimited`。シートを出せない面（埋め込みなど）と、`GRush.IsInviteAvailable` が `false`（`protocolVersion` が `GRush.InviteProtocolVersion`（13）未満）の GameRush と GameRush の外では `Unsupported`。
+部屋に居なければ `Unavailable`、ゲストなら `SignInRequired`、5 秒に 1 回より多く呼ぶと `RateLimited`。GameRush が招待を送れなかったとき（GameRush のサーバの招待の上限・空いた席の不足・部屋を出たなど）は、シートの中に理由が出る。ゲームへエラーは返らず、閉じると `Cancelled`。シートを出せない面（埋め込みなど）と、`GRush.IsInviteAvailable` が `false`（`protocolVersion` が `GRush.InviteProtocolVersion`（13）未満）の GameRush と GameRush の外では `Unsupported`。
 
-招かれた人が通知から開くと、そのゲームの `GRushLaunch.Invite` に `Mode` と `RoomCode` が入る（ほかは `null`）。そのまま `JoinAsync(Mode, RoomCode)` に渡すと招いた人の部屋へ入る。定員と形は部屋のものになるので、`GRushJoinOptions` で渡さなくてよい。
+招かれた人が通知から開くと、そのゲームの `GRushLaunch.Invite` に `Mode` と `RoomCode` が入る（ほかは `null`）。そのまま `JoinAsync(Mode, RoomCode)` に渡すと招いた人の部屋へ入る。招待の `Mode` と `RoomCode` の join は招待の部屋にだけ入り、招いた人が部屋を出た・満員・招待の期限（15 分）が切れたときは、新しい部屋を作らずに `Unavailable`。招待の部屋への join は `GRushJoinOptions` の `MaxPeers`・`Topology` を見ず、部屋の定員と形で入る。別のゲームへスワイプしてから戻った後の join は招待の join にならず、部屋コードを渡した普通の join になる。
 
 `GRush` は例外を投げない。GameRush の外で動かした場合も `GRushResult<T>.Ok` が `false`、`Code` が `GRushErrorCode.Unsupported` になるだけで、ゲームは止まらない（アナリティクスは `bool` を返す。下記）。
 

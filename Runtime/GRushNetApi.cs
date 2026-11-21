@@ -3,11 +3,13 @@ using System.Threading.Tasks;
 
 namespace GRushSdk
 {
+    // count は double で受ける。int で受けると、JsonUtility が 1.5 のような値を丸めて読むことがあり、JavaScript と Godot の
+    // SDK（整数でない人数は cancelled）と食い違う。
     [Serializable]
     internal class GRushInviteResultWire
     {
         public string status;
-        public int count;
+        public double count;
     }
 
     public sealed class GRushNetApi
@@ -114,7 +116,8 @@ namespace GRushSdk
         /// 招かれた人が通知から開くと、<see cref="GRushLaunch.Invite"/> にこの部屋が入る。
         ///
         /// シートを出している間もゲームは止まらず、部屋の相手との対戦は続く。
-        /// 部屋に居なければ Unavailable、ゲストなら SignInRequired、続けて呼ぶと RateLimited。
+        /// 部屋に居なければ Unavailable、ゲストなら SignInRequired、5 秒に 1 回より多く呼ぶと RateLimited。
+        /// GameRush が招待を送れなかったとき（上限・空き席の不足など）は、シートの中で理由を出し、閉じると Cancelled。
         /// シートを出せない面（埋め込みなど）と、<see cref="GRush.IsInviteAvailable"/> が false の古いランタイムと
         /// GameRush の外では Unsupported。
         /// </summary>
@@ -129,22 +132,53 @@ namespace GRushSdk
             {
                 return GRushResult<GRushInviteResult>.Failure(response.Code, response.Message);
             }
-            var wire = GRushWire.Parse<GRushInviteResultWire>(response.Value);
-            if (wire == null)
+            GRushInviteResult result;
+            if (!TryReadInvite(response.Value, GRushWire.Parse<GRushInviteResultWire>(response.Value), out result))
             {
                 return GRushResult<GRushInviteResult>.Failure(
                     GRushErrorCode.Internal,
                     "GameRush returned an unreadable invite result."
                 );
             }
-            var sent = wire.status == "sent" && wire.count > 0;
-            return GRushResult<GRushInviteResult>.Success(
-                new GRushInviteResult
+            return GRushResult<GRushInviteResult>.Success(result);
+        }
+
+        // 招待の答えを読む。JsonUtility は null・数・配列の JSON からも既定値のオブジェクトを作ることがあるので、
+        // 生の JSON がオブジェクトかどうかを先に見る。オブジェクトでない答えは読めない答え（false）で、JavaScript と
+        // Godot の SDK と同じく Internal になる。送ったのは status が sent で人数が正の整数のときだけで、ほかは Cancelled。
+        internal static bool TryReadInvite(string json, GRushInviteResultWire wire, out GRushInviteResult result)
+        {
+            result = default(GRushInviteResult);
+            if (wire == null || !IsJsonObject(json))
+            {
+                return false;
+            }
+            var sent = wire.status == "sent"
+                && wire.count >= 1
+                && wire.count <= int.MaxValue
+                && Math.Floor(wire.count) == wire.count;
+            result = new GRushInviteResult
+            {
+                Status = sent ? GRushInviteStatus.Sent : GRushInviteStatus.Cancelled,
+                Count = sent ? (int)wire.count : 0,
+            };
+            return true;
+        }
+
+        private static bool IsJsonObject(string json)
+        {
+            if (json == null)
+            {
+                return false;
+            }
+            foreach (var c in json)
+            {
+                if (!char.IsWhiteSpace(c))
                 {
-                    Status = sent ? GRushInviteStatus.Sent : GRushInviteStatus.Cancelled,
-                    Count = sent ? wire.count : 0,
+                    return c == '{';
                 }
-            );
+            }
+            return false;
         }
 
         internal void Forget(GRushRoom closed)

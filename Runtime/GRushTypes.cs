@@ -403,7 +403,7 @@ namespace GRushSdk
         public GRushShopProduct[] Products;
     }
 
-    /// <summary>部屋への招待（<c>Net.InviteAsync</c>）の結果。</summary>
+    /// <summary>部屋への招待（<c>Net.InviteAsync</c>）で送ったかどうか。</summary>
     public enum GRushInviteStatus
     {
         /// <summary>送らずにシートを閉じた。</summary>
@@ -413,10 +413,13 @@ namespace GRushSdk
         Sent,
     }
 
-    /// <summary>部屋への招待の結果。誰へ送ったかはゲームへ渡らない。</summary>
+    /// <summary>
+    /// 部屋への招待（<c>Net.InviteAsync</c>）の結果。返るのは送ったかどうかと人数だけで、誰へ送ったかはゲームへ渡らない。
+    /// </summary>
     [Serializable]
     public struct GRushInviteResult
     {
+        /// <summary>1人以上へ送ったら <see cref="GRushInviteStatus.Sent"/>、送らずに閉じたら <see cref="GRushInviteStatus.Cancelled"/>。</summary>
         public GRushInviteStatus Status;
 
         /// <summary>送った人数。<see cref="GRushInviteStatus.Cancelled"/> では 0。</summary>
