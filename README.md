@@ -77,11 +77,11 @@ if (launched.Ok && launched.Value.Invite != null)
 }
 ```
 
-`GRush.Net.InviteAsync()` は引数を取らない。GameRush が相互フォローの相手を選ぶシートを出し、今入っている部屋へ招く。ゲームは部屋も相手も選べず、受け取るのは `GRushInviteResult` の `Status`（1人以上へ送ったら `Sent`、送らずに閉じたら `Cancelled`）と `Count`（送った人数。`Cancelled` では 0）だけ。選べるのは部屋の空いた席の数と 30 人の小さいほうまで。シートを出している間もゲームは止まらず、部屋の相手との対戦は続く。
+`GRush.Net.InviteAsync()` は引数を取らない。GameRush が相互フォローの相手を選ぶシートを出し、今入っている部屋へ招く。ゲームは部屋も相手も選べず、受け取るのは `GRushInviteResult` の `Status`（1人以上へ送ったら `Sent`、送らずに閉じたら `Cancelled`）と `Count`（送った人数。`Cancelled` では 0）だけ。選べるのは部屋の空いた席の数と 30 人の小さいほうまで。シートを出している間もゲームは止まらず、部屋の相手との対戦は続く。シートを出せないときは、出さずにすぐ `Cancelled` が返る。ゲームのスライドが前面にないとき・プレイヤーが別の画面（閲覧など）を見ているとき、送らずに閉じたスライドで閉じてから 60 秒の間がそう。
 
 部屋に居なければ `Unavailable`、ゲストなら `SignInRequired`、5 秒に 1 回より多く呼ぶと `RateLimited`。GameRush が招待を送れなかったとき（GameRush のサーバの招待の上限・空いた席の不足・部屋を出たなど）は、シートの中に理由が出る。ゲームへエラーは返らず、閉じると `Cancelled`。シートを出せない面（埋め込みなど）と、`GRush.IsInviteAvailable` が `false`（`protocolVersion` が `GRush.InviteProtocolVersion`（13）未満）の GameRush と GameRush の外では `Unsupported`。
 
-招かれた人が通知から開くと、そのゲームの `GRushLaunch.Invite` に `Mode` と `RoomCode` が入る（ほかは `null`）。そのまま `JoinAsync(Mode, RoomCode)` に渡すと招いた人の部屋へ入る。招待の `Mode` と `RoomCode` の join は招待の部屋にだけ入り、招いた人が部屋を出た・満員・招待の期限（15 分）が切れたときは、新しい部屋を作らずに `Unavailable`。招待の部屋への join は `GRushJoinOptions` の `MaxPeers`・`Topology` を見ず、部屋の定員と形で入る。別のゲームへスワイプしてから戻った後の join は招待の join にならず、部屋コードを渡した普通の join になる。
+招かれた人が通知から開くと、そのゲームの `GRushLaunch.Invite` に `Mode` と `RoomCode` が入る（ほかは `null`）。そのまま `JoinAsync(Mode, RoomCode)` に渡すと招いた人の部屋へ入る。招待の `Mode` と `RoomCode` の join は招待の部屋にだけ入り、招いた人が部屋を出た・満員・招待の期限（15 分）が切れたときは、新しい部屋を作らずに `Unavailable`。招待の部屋への join は `GRushJoinOptions` の `MaxPeers`・`Topology` を見ず、部屋の定員と形で入る。招待で一度部屋に入った後の join（部屋の寿命や切断の後の入り直し）は招待の join にならず、部屋コードを渡した普通の join になる。別のゲームへスワイプしてから戻った後の join も同じ。
 
 `GRush` は例外を投げない。GameRush の外で動かした場合も `GRushResult<T>.Ok` が `false`、`Code` が `GRushErrorCode.Unsupported` になるだけで、ゲームは止まらない（アナリティクスは `bool` を返す。下記）。
 
@@ -324,7 +324,7 @@ opponent.Received += message => opponent.Send(reply, GRushChannel.Unreliable, GR
 
 起動パラメータのモックは `GRushMock.LaunchParams`（既定は空。例 `GRushMock.LaunchParams["item"] = "sword";`）をそのまま返す。GameRush の制限では確かめない。`GRushMock.Reset()` で空になる。
 
-招待のモックはシートを出さず、偽のフレンドへ送ったことにする。`GRush.Net.InviteAsync` は、部屋に居なければ `Unavailable`、`GRushMock.SignedIn = false` なら `SignInRequired` を返し、ほかは `GRushMock.InviteCount`（既定 1）人へ送ったことにして `Sent` を返す。人数は部屋の空いた席の数と 30 の小さいほうまでに絞り、0 になれば `Cancelled`。`GRushMock.InviteStatus = GRushInviteStatus.Cancelled` で送らずに閉じたことにする。招待から開いたときを試すには、`GRushMock.LaunchInviteMode` と `GRushMock.LaunchInviteRoomCode` の両方を入れる。`GRushLaunch.Invite` に載り、形が join の規則に合わなければ `null` になる。どれも `GRushMock.Reset()` で既定に戻る。
+招待のモックはシートを出さず、偽のフレンドへ送ったことにする。`GRush.Net.InviteAsync` は、部屋に居なければ `Unavailable`、`GRushMock.SignedIn = false` なら `SignInRequired` を返し、ほかは `GRushMock.InviteCount`（既定 1）人へ送ったことにして `Sent` を返す。人数は部屋の空いた席の数と 30 の小さいほうまでに絞り、0 になれば `Cancelled`。`GRushMock.InviteStatus = GRushInviteStatus.Cancelled` で送らずに閉じたことにする。招待から開いたときを試すには、`GRushMock.LaunchInviteMode` と `GRushMock.LaunchInviteRoomCode` の両方を入れる。`GRushLaunch.Invite` に載り、形が join の規則に合わなければ `null` になる。どれも `GRushMock.Reset()` で既定に戻る。モックは招待の join を再現しない。`LaunchInviteMode`・`LaunchInviteRoomCode` の部屋へ join すると、GameRush と違い、招いた人の居ない新しい部屋になる。
 
 ```csharp
 GRushMock.LaunchInviteMode = "duel";
