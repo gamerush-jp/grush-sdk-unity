@@ -379,7 +379,29 @@ namespace GRushSdk
         public int ExpiresInSec;
     }
 
-    /// <summary>作者が登録した販売中の商品。名前と価格は作者が Studio か API キーで決める。</summary>
+    /// <summary>
+    /// 作者のアイテムの種類。作者が商品を登録するときに決め、後から変えられない。
+    /// 消費のアイテムを、ゲーム内通貨（ほかのアイテムや機能と交換する対価）と抽選（偶然で中身が決まる仕組み）に使ってはならない。
+    /// </summary>
+    public enum GRushShopItemType
+    {
+        /// <summary>この SDK が知らない種類。<see cref="GRushShopProduct.RawType"/> に GameRush が返した値が入る。</summary>
+        Unknown,
+
+        /// <summary>
+        /// 買い切り。同じプレイヤーは、返金されない限り 1 回だけ買え、持っている間の購入は
+        /// <see cref="GRushShopPurchaseStatus.AlreadyOwned"/>。<c>Shop.OwnedAsync</c> に入る。
+        /// </summary>
+        Permanent,
+
+        /// <summary>
+        /// 消費。同じプレイヤーが何度でも買え、買うたびに付与が 1 件ずつ <c>Shop.PendingAsync</c> に入る。
+        /// <c>Shop.OwnedAsync</c> には入らない。
+        /// </summary>
+        Consumable,
+    }
+
+    /// <summary>作者が登録した販売中の商品。名前・価格・種類は作者が Studio か API キーで決める。</summary>
     [Serializable]
     public struct GRushShopProduct
     {
@@ -390,13 +412,26 @@ namespace GRushSdk
 
         /// <summary>税込みの価格（円）。</summary>
         public int PriceJpy;
+
+        /// <summary>
+        /// 商品の種類。種類を返さない古い GameRush の商品は <see cref="GRushShopItemType.Permanent"/>。
+        /// 知らない値は <see cref="GRushShopItemType.Unknown"/> になる。
+        /// </summary>
+        public GRushShopItemType Type;
+
+        /// <summary>
+        /// GameRush が返した種類の文字列（<c>"permanent"</c> か <c>"consumable"</c>）。
+        /// 種類を返さない古い GameRush の商品は <c>"permanent"</c>。<see cref="Type"/> が Unknown のときに中身を見る。
+        /// </summary>
+        public string RawType;
     }
 
     [Serializable]
     public struct GRushShopCatalog
     {
         /// <summary>
-        /// この面で買えるか。アプリと LINE では false で、<see cref="Products"/> は空。
+        /// この面で買えるか。Android のアプリと LINE では false で、<see cref="Products"/> は空。
+        /// iOS のアプリでは、App Store の価格（100・120・300・500・1,000 円）に合う商品だけが入る。
         /// </summary>
         public bool Enabled;
 
@@ -429,16 +464,25 @@ namespace GRushSdk
     /// <summary>購入の結果。知らない値は <see cref="Unknown"/> になる。</summary>
     public enum GRushShopPurchaseStatus
     {
+        /// <summary>この SDK が知らない結果。<see cref="GRushShopPurchaseResult.RawStatus"/> に GameRush が返した値が入る。</summary>
         Unknown,
 
-        /// <summary>決済画面へ移る。ページはすぐ離れる。</summary>
+        /// <summary>決済画面へ移る。ページはすぐ離れる（Web）。</summary>
         Redirecting,
 
         /// <summary>プレイヤーが購入をやめた。</summary>
         Cancelled,
 
-        /// <summary>もう持っている。</summary>
+        /// <summary>同じ買い切りの商品をもう持っている。消費のアイテムでは返らない。</summary>
         AlreadyOwned,
+
+        /// <summary>買い終え、付与が <c>Shop.PendingAsync</c> に入った（iOS のアプリ）。続けて <c>Shop.PendingAsync</c> を読む。</summary>
+        Purchased,
+
+        /// <summary>
+        /// 支払いの確認や保護者の承認を待っている（iOS のアプリ）。済むと付与が <c>Shop.PendingAsync</c> に入る。
+        /// </summary>
+        Pending,
     }
 
     [Serializable]
@@ -464,7 +508,9 @@ namespace GRushSdk
         /// <summary>付与した日時（ISO 8601）。</summary>
         public string CreatedAt;
 
-        /// <summary>Ack 済みか。<c>Shop.PendingAsync</c> の付与では常に false。</summary>
+        /// <summary>
+        /// Ack（ゲームへ届けた）済みか。<c>Shop.PendingAsync</c> の付与では常に false。
+        /// </summary>
         public bool Acked;
     }
 

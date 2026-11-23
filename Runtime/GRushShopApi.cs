@@ -5,16 +5,24 @@ namespace GRushSdk
 {
     /// <summary>
     /// 作者アイテム販売。作者が登録した商品をプレイヤーが買い、届いた付与をゲームがセーブへ反映する。
-    /// 商品名と価格は作者が Studio か API キーで登録し、ゲームは <see cref="ProductsAsync"/> で読む。
+    /// 商品名・価格・種類は作者が Studio か API キーで登録し、ゲームは <see cref="ProductsAsync"/> で読む。
     ///
-    /// 購入できるのは Web の GameRush だけ。アプリと LINE では <see cref="PurchaseAsync"/> が Unsupported、
-    /// <see cref="ProductsAsync"/> は Enabled が false で空。<see cref="PendingAsync"/>・<see cref="AckAsync"/>・
-    /// <see cref="OwnedAsync"/> も今はアプリと LINE では Unsupported（Web で買った分は Web で受け取る）。
+    /// 種類は買い切り（<see cref="GRushShopItemType.Permanent"/>）と消費（<see cref="GRushShopItemType.Consumable"/>）の
+    /// 2 つ。消費のアイテムは何度でも買え、<see cref="OwnedAsync"/> に入らない。消費のアイテムを、ゲーム内通貨
+    /// （ほかのアイテムや機能と交換する対価）と抽選（偶然で中身が決まる仕組み）に使ってはならない。
+    ///
+    /// 購入できるのは Web の GameRush と iOS のアプリ。Android のアプリと LINE では <see cref="PurchaseAsync"/> が
+    /// Unsupported、<see cref="ProductsAsync"/> は Enabled が false で空で、<see cref="PendingAsync"/>・
+    /// <see cref="AckAsync"/>・<see cref="OwnedAsync"/> も Unsupported。
     ///
     /// 取りこぼさないために、次の順で使う。
     /// 1. <see cref="PurchaseAsync"/> を呼ぶ前にセーブを保存する。Redirecting が返るとページはすぐ決済画面へ移る。
-    /// 2. 起動時と <see cref="PendingReceived"/> のときに <see cref="PendingAsync"/> を読む。
-    /// 3. 付与をセーブへ反映して保存してから <see cref="AckAsync"/> する。Ack するまで付与は Pending に残る。
+    /// 2. 起動時、<see cref="PendingReceived"/> のとき、<see cref="PurchaseAsync"/> が Purchased を返したときに
+    ///    <see cref="PendingAsync"/> を読む。
+    /// 3. 付与をセーブへ反映して保存してから <see cref="AckAsync"/> する。Ack は「ゲームへ届けた」ことを表し、
+    ///    Ack するまで付与は Pending に残る。
+    /// 4. 反映した付与の ID をセーブに持ち、同じ付与を二度反映しない。消費のアイテムは <see cref="OwnedAsync"/> で
+    ///    組み直せないので、特に大事。
     ///
     /// ゲームの中での使用は改ざんを防げない。GameRush が保証するのは、払った人に付与が届くことまで。
     ///
@@ -83,7 +91,10 @@ namespace GRushSdk
             handler(wire == null || string.IsNullOrEmpty(wire.sku) ? null : wire.sku);
         }
 
-        /// <summary>販売中の商品。アプリと LINE では Enabled が false で、Products は空。</summary>
+        /// <summary>
+        /// 販売中の商品と、その種類（<see cref="GRushShopProduct.Type"/>）。Android のアプリと LINE では Enabled が false で、
+        /// Products は空。
+        /// </summary>
         public async Task<GRushResult<GRushShopCatalog>> ProductsAsync()
         {
             if (!GRush.IsShopAvailable)
@@ -117,8 +128,10 @@ namespace GRushSdk
 
         /// <summary>
         /// <paramref name="sku"/> の商品を買う。**呼ぶ前にセーブを保存すること。** Redirecting が返ると
-        /// ページはすぐ決済画面へ移り、付与は戻ってから Pending に届く。sku が
-        /// <c>^[a-z0-9][a-z0-9_.-]{0,63}$</c> でなければ送らずに InvalidParams。アプリと LINE では Unsupported。
+        /// ページはすぐ決済画面へ移り、付与は戻ってから Pending に届く（Web）。iOS のアプリでは Purchased
+        /// （付与が Pending に入った）か Pending（確かめ・承認の待ち）が返る。買い切りの商品をもう持っていれば
+        /// AlreadyOwned で、消費の商品では返らない。sku が
+        /// <c>^[a-z0-9][a-z0-9_.-]{0,63}$</c> でなければ送らずに InvalidParams。Android のアプリと LINE では Unsupported。
         /// GameRush の確認と決済を待つので、ほかの呼び出しより長く（最大 10 分）待つ。
         /// </summary>
         public async Task<GRushResult<GRushShopPurchaseResult>> PurchaseAsync(string sku)
@@ -167,8 +180,8 @@ namespace GRushSdk
         }
 
         /// <summary>
-        /// 付与の受け取りを確かめ、記録した件数を返す。<paramref name="ids"/> は 1〜100 件の付与 ID（UUID）で、
-        /// 合わなければ送らずに InvalidParams。**セーブへ反映して保存してから呼ぶこと。**
+        /// 付与をゲームへ届けたことを記録し、記録した件数を返す。<paramref name="ids"/> は 1〜100 件の付与 ID（UUID）で、
+        /// 合わなければ送らずに InvalidParams。**セーブへ反映して保存し、反映した付与の ID をセーブに持ってから呼ぶこと。**
         /// Ack した付与は Pending に戻らない。
         /// </summary>
         public async Task<GRushResult<int>> AckAsync(string[] ids)
@@ -201,7 +214,8 @@ namespace GRushSdk
         }
 
         /// <summary>
-        /// このゲームで受け取ったすべての付与（Ack 済みを含む）。
+        /// このゲームで受け取った買い切りの付与のすべて（Ack 済みを含む）。返金された付与と、消費のアイテムの付与は入らない。
+        /// 機種を替えたときなど、セーブを組み直すときに読む。
         /// </summary>
         public Task<GRushResult<GRushShopGrant[]>> OwnedAsync()
         {

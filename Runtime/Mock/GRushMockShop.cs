@@ -5,10 +5,12 @@ using System.Text;
 namespace GRushSdk
 {
     /// <summary>
-    /// エディタ用の作者アイテム販売。<see cref="Define"/> で置いた商品を <c>Shop.ProductsAsync</c> が返す。
+    /// エディタ用の作者アイテム販売。<see cref="Define(string, string, int, GRushShopItemType)"/> で置いた商品を
+    /// <c>Shop.ProductsAsync</c> が返す。
     /// <c>Shop.PurchaseAsync</c> は決済画面へ移らず、すぐに付与を Pending に積んで Redirecting を返し、
     /// <c>Shop.PendingReceived</c> を呼ぶ（<see cref="GRushMock.ShopPurchaseStatus"/> が Redirecting のとき）。
-    /// sku と ack の id は GameRush と同じ形で確かめる。
+    /// GameRush と同じく、買い切りの商品は付与済みなら AlreadyOwned で、消費の商品は何度でも買えて
+    /// <c>Shop.OwnedAsync</c> に入らない。sku と ack の id は GameRush と同じ形で確かめる。
     /// <see cref="GRushMock.Reset"/> で付与は消えるが、置いた商品は残る（<see cref="Clear"/> で消す）。
     /// </summary>
     public static class GRushMockShop
@@ -18,6 +20,7 @@ namespace GRushSdk
             public string Sku;
             public string Name;
             public int PriceJpy;
+            public GRushShopItemType Type;
         }
 
         private sealed class GrantRecord
@@ -26,6 +29,7 @@ namespace GRushSdk
             public string Sku;
             public string CreatedAt;
             public bool Acked;
+            public bool Consumable;
         }
 
         private static readonly List<ProductRecord> products = new List<ProductRecord>();
@@ -38,17 +42,39 @@ namespace GRushSdk
         private static Action<string> handler;
 
         /// <summary>
-        /// 商品を置く。同じ sku は置き換える。sku が <c>^[a-z0-9][a-z0-9_.-]{0,63}$</c> でないか、
-        /// 名前が空か、価格が 1 未満なら置かずに false。
+        /// 買い切り（<see cref="GRushShopItemType.Permanent"/>）の商品を置く。
+        /// <see cref="Define(string, string, int, GRushShopItemType)"/> と同じ。
         /// </summary>
         public static bool Define(string sku, string name, int priceJpy)
         {
-            if (!GRushShopRules.IsSku(sku) || string.IsNullOrEmpty(name) || priceJpy < 1)
+            return Define(sku, name, priceJpy, GRushShopItemType.Permanent);
+        }
+
+        /// <summary>
+        /// 種類を決めて商品を置く。同じ sku は置き換える。sku が <c>^[a-z0-9][a-z0-9_.-]{0,63}$</c> でないか、
+        /// 名前が空か、価格が 1 未満か、種類が Permanent でも Consumable でもなければ置かずに false。
+        /// </summary>
+        public static bool Define(string sku, string name, int priceJpy, GRushShopItemType type)
+        {
+            if (
+                !GRushShopRules.IsSku(sku)
+                || string.IsNullOrEmpty(name)
+                || priceJpy < 1
+                || GRushWire.ShopItemTypeWire(type) == null
+            )
             {
                 return false;
             }
             products.RemoveAll(product => product.Sku == sku);
-            products.Add(new ProductRecord { Sku = sku, Name = name, PriceJpy = priceJpy });
+            products.Add(
+                new ProductRecord
+                {
+                    Sku = sku,
+                    Name = name,
+                    PriceJpy = priceJpy,
+                    Type = type,
+                }
+            );
             return true;
         }
 
@@ -60,24 +86,36 @@ namespace GRushSdk
 
         /// <summary>
         /// 購入を経ずに <paramref name="sku"/> の付与を Pending に積み、付与の合図を送る。積んだ付与の ID を返す。
-        /// sku の形が違えば何もせず null。置いていない sku でも積める。
+        /// sku の形が違えば何もせず null。置いていない sku でも積める。置いた消費の商品の付与は
+        /// <c>Shop.OwnedAsync</c> に入らない。
         /// </summary>
         public static string Grant(string sku)
+        {
+            var id = AddGrant(sku);
+            if (id != null)
+            {
+                signal = "{\"sku\":" + GRushWire.Escape(sku) + "}";
+                sequence++;
+                Deliver();
+            }
+            return id;
+        }
+
+        private static string AddGrant(string sku)
         {
             if (!GRushShopRules.IsSku(sku))
             {
                 return null;
             }
+            var product = products.Find(item => item.Sku == sku);
             var grant = new GrantRecord
             {
                 Id = Guid.NewGuid().ToString(),
                 Sku = sku,
                 CreatedAt = GRushMockInbox.Timestamp(DateTime.UtcNow),
+                Consumable = product != null && product.Type == GRushShopItemType.Consumable,
             };
             grants.Add(grant);
-            signal = "{\"sku\":" + GRushWire.Escape(sku) + "}";
-            sequence++;
-            Deliver();
             return grant.Id;
         }
 
@@ -136,7 +174,9 @@ namespace GRushSdk
                 }
                 builder.Append("{\"sku\":").Append(GRushWire.Escape(product.Sku));
                 builder.Append(",\"name\":").Append(GRushWire.Escape(product.Name));
-                builder.Append(",\"priceJpy\":").Append(product.PriceJpy).Append('}');
+                builder.Append(",\"priceJpy\":").Append(product.PriceJpy);
+                builder.Append(",\"type\":");
+                builder.Append(GRushWire.Escape(GRushWire.ShopItemTypeWire(product.Type))).Append('}');
             }
             return GRushRpcResponse.Success(builder.Append("]}").ToString());
         }
@@ -162,7 +202,8 @@ namespace GRushSdk
                     "Purchases are available only on the GameRush website."
                 );
             }
-            if (products.Find(product => product.Sku == sku) == null)
+            var product = products.Find(item => item.Sku == sku);
+            if (product == null)
             {
                 return Invalid("No product for that sku.");
             }
@@ -170,8 +211,8 @@ namespace GRushSdk
             {
                 return GRushRpcResponse.Failure(GRushErrorCode.SignInRequired, "Purchases require sign-in.");
             }
-            // Ack 済みを含め、付与済みの sku は買えない。
-            if (grants.Exists(grant => grant.Sku == sku))
+            // 買い切りの商品は、Ack 済みを含め付与済みなら買えない。消費の商品は何度でも買える。
+            if (product.Type != GRushShopItemType.Consumable && grants.Exists(grant => grant.Sku == sku))
             {
                 return GRushRpcResponse.Success("{\"status\":\"alreadyOwned\"}");
             }
@@ -183,6 +224,13 @@ namespace GRushSdk
                     return GRushRpcResponse.Success("{\"status\":\"alreadyOwned\"}");
                 case GRushShopPurchaseStatus.Unknown:
                     return GRushRpcResponse.Success("{\"status\":\"unknown\"}");
+                case GRushShopPurchaseStatus.Purchased:
+                    // iOS のアプリと同じく、決済画面へ移らずに付与を Pending に積む。戻りの合図は無い。
+                    AddGrant(sku);
+                    return GRushRpcResponse.Success("{\"status\":\"purchased\"}");
+                case GRushShopPurchaseStatus.Pending:
+                    // 承認を待っている間は、まだ付与しない。
+                    return GRushRpcResponse.Success("{\"status\":\"pending\"}");
                 default:
                     Grant(sku);
                     return GRushRpcResponse.Success("{\"status\":\"redirecting\"}");
@@ -191,12 +239,13 @@ namespace GRushSdk
 
         internal static GRushRpcResponse HandlePending()
         {
-            return GrantsJson(false, MaxPending);
+            return GrantsJson(false, true, MaxPending);
         }
 
+        // GameRush と同じく、消費のアイテムの付与は owned に入れない。
         internal static GRushRpcResponse HandleOwned()
         {
-            return GrantsJson(true, int.MaxValue);
+            return GrantsJson(true, false, int.MaxValue);
         }
 
         // GameRush の pending は1回に 100 件まで返す。
@@ -226,14 +275,14 @@ namespace GRushSdk
             return GRushRpcResponse.Success("{\"acked\":" + acked + "}");
         }
 
-        private static GRushRpcResponse GrantsJson(bool includeAcked, int limit)
+        private static GRushRpcResponse GrantsJson(bool includeAcked, bool includeConsumable, int limit)
         {
             var builder = new StringBuilder("{\"grants\":[");
             var first = true;
             var count = 0;
             foreach (var grant in grants)
             {
-                if (grant.Acked && !includeAcked)
+                if ((grant.Acked && !includeAcked) || (grant.Consumable && !includeConsumable))
                 {
                     continue;
                 }
