@@ -169,6 +169,7 @@ namespace GRushSdk
         public string sku;
         public string name;
         public int priceJpy;
+        public string type;
     }
 
     [Serializable]
@@ -800,8 +801,44 @@ namespace GRushSdk
                     return GRushShopPurchaseStatus.Cancelled;
                 case "alreadyOwned":
                     return GRushShopPurchaseStatus.AlreadyOwned;
+                case "purchased":
+                    return GRushShopPurchaseStatus.Purchased;
+                case "pending":
+                    return GRushShopPurchaseStatus.Pending;
                 default:
                     return GRushShopPurchaseStatus.Unknown;
+            }
+        }
+
+        // 種類を返さない古い GameRush の商品は、どれも買い切り。
+        public static string ShopRawTypeOf(string type)
+        {
+            return string.IsNullOrEmpty(type) ? "permanent" : type;
+        }
+
+        public static GRushShopItemType ShopItemTypeOf(string rawType)
+        {
+            switch (rawType)
+            {
+                case "permanent":
+                    return GRushShopItemType.Permanent;
+                case "consumable":
+                    return GRushShopItemType.Consumable;
+                default:
+                    return GRushShopItemType.Unknown;
+            }
+        }
+
+        public static string ShopItemTypeWire(GRushShopItemType type)
+        {
+            switch (type)
+            {
+                case GRushShopItemType.Permanent:
+                    return "permanent";
+                case GRushShopItemType.Consumable:
+                    return "consumable";
+                default:
+                    return null;
             }
         }
 
@@ -813,12 +850,15 @@ namespace GRushSdk
             {
                 if (wire != null && !string.IsNullOrEmpty(wire.sku))
                 {
+                    var rawType = ShopRawTypeOf(wire.type);
                     products.Add(
                         new GRushShopProduct
                         {
                             Sku = wire.sku,
                             Name = wire.name ?? string.Empty,
                             PriceJpy = wire.priceJpy,
+                            Type = ShopItemTypeOf(rawType),
+                            RawType = rawType,
                         }
                     );
                 }

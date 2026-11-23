@@ -23,15 +23,16 @@ namespace GRushSdk
         public static bool ConfirmPlayerStateReport = true;
 
         /// <summary>
-        /// 作者アイテム販売で買える面か。false はアプリと LINE と同じく、<c>Shop.ProductsAsync</c> が
+        /// 作者アイテム販売で買える面か。false は Android のアプリと LINE と同じく、<c>Shop.ProductsAsync</c> が
         /// Enabled false の空を返し、<c>Shop.PurchaseAsync</c> が Unsupported になる。
         /// </summary>
         public static bool ShopEnabled = true;
 
         /// <summary>
-        /// <c>Shop.PurchaseAsync</c> が返す結果。Redirecting のときだけ、すぐに付与を Pending に積んで
-        /// <c>Shop.PendingReceived</c> を呼ぶ。ゲストは SignInRequired、付与済み（Ack 済みを含む）の sku は
-        /// この設定によらず AlreadyOwned。
+        /// <c>Shop.PurchaseAsync</c> が返す結果。Redirecting のときは、すぐに付与を Pending に積んで
+        /// <c>Shop.PendingReceived</c> を呼ぶ。Purchased のときは iOS のアプリと同じく、付与を Pending に積むが
+        /// <c>Shop.PendingReceived</c> は呼ばない。ほかの値では付与を積まない。ゲストは SignInRequired、
+        /// 付与済み（Ack 済みを含む）の買い切りの sku はこの設定によらず AlreadyOwned。
         /// </summary>
         public static GRushShopPurchaseStatus ShopPurchaseStatus = GRushShopPurchaseStatus.Redirecting;
 
@@ -127,7 +128,7 @@ namespace GRushSdk
 
         /// <summary>
         /// 表示言語・起動パラメータと招待の部屋・招待の答え・部屋・分析イベント・受信箱・交換所（通報によるブロックを含む）・
-        /// 作者アイテム販売の付与をはじめの状態へ戻す。<see cref="GRushMockShop.Define"/> で置いた商品は残る。
+        /// 作者アイテム販売の付与をはじめの状態へ戻す。<see cref="GRushMockShop.Define(string, string, int, GRushShopItemType)"/> で置いた商品は残る。
         /// </summary>
         public static void Reset()
         {
