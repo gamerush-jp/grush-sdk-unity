@@ -7,7 +7,7 @@ GameRush の GameAPI を Unity から呼ぶための UPM パッケージ。ビ�
 Package Manager の `Add package from git URL...` に次を入れる。
 
 ```text
-https://github.com/gamerush-jp/grush-sdk-unity.git#v1.19.0
+https://github.com/gamerush-jp/grush-sdk-unity.git#v1.20.0
 ```
 
 Unity 2021.3 以降。ビルドターゲットは WebGL。
@@ -34,6 +34,23 @@ if (joined.Ok)
 ```
 
 部屋が1通を捨てると `GRushRoom.Error` が届く。`Code` は `"messageTooLarge"`・`"rateLimited"`・`"badFrame"`・`"targetNotAllowed"` で、ほかの値が届くこともある。部屋はつながったままで、続けて送れる。部屋が閉じるときは `Closed` だけが届く。
+
+### 作者かどうか
+
+`GRushPlayer.IsCreator` は、遊んでいる人がこのゲームのオーナーか、承諾済みの共同制作者なら `true`。GameRush のサーバが決め、ゲームから変えられない。デバッグメニューのような、作者にだけ見せる表示の出し分けに使う。
+
+```csharp
+var self = await GRush.Player.GetSelfAsync();
+if (self.Ok && self.Value.IsCreator)
+{
+    debugMenu.SetActive(true);
+}
+```
+
+- **権限ではない。** ゲームは遊ぶ人のブラウザで動くので、書き換えれば作者でなくても `true` に見せられる。アイテムの付与やスコアのように守りたいことを、このフラグだけで許さない。課金のテストは、GameRush が作者かどうかを確かめるテスト購入（下記「作者アイテム販売」）を使う
+- ゲストは常に `false`
+- 共同制作者を承諾したとき・外したときは、反映に最大 30 秒ほどかかる
+- エディタのモックは既定で `true`。`GRushMock.IsCreator = false` で作者でない人として試せる（`GRushMock.SignedIn = false` では常に `false`）
 
 ### 部屋の定員と形
 
@@ -319,6 +336,7 @@ WebGL 以外（エディタ・スタンドアロン）では自動的に `GRushM
 GRushMock.SignedIn = true;
 GRushMock.DisplayName = "Editor Player";
 GRushMock.GrantProfileConsent = false;
+GRushMock.IsCreator = false;
 GRushMock.UnreliableDropRate = 0.1;
 GRushMock.ShareStatus = GRushShareStatus.Cancelled;
 

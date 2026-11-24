@@ -14,6 +14,15 @@ namespace GRushSdk
         public string PseudoId;
         public bool IsGuest;
         public bool ProfileConsent;
+
+        /// <summary>
+        /// このゲームのオーナーか、承諾済みの共同制作者なら true。GameRush のサーバが決める。
+        /// デバッグメニューのような、作者にだけ見せる表示の出し分けに使う。権限ではない。
+        /// ゲームのコードは遊ぶ人の手元で動き、書き換えれば true に見せられるので、守りたい操作は
+        /// GameRush が確かめるもの（ショップのテスト購入など）に任せる。ゲストは常に false。
+        /// </summary>
+        public bool IsCreator;
+
         public string DisplayName;
         public string AvatarUrl;
     }

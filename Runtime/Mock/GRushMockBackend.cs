@@ -565,6 +565,7 @@ namespace GRushSdk
                 pseudoId = PseudoId,
                 isGuest = !GRushMock.SignedIn,
                 profileConsent = consented && GRushMock.SignedIn,
+                isCreator = GRushMock.IsCreator && GRushMock.SignedIn,
                 profile = new GRushProfileWire
                 {
                     displayName = GRushMock.DisplayName,

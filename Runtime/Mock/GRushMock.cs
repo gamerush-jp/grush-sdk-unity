@@ -9,6 +9,12 @@ namespace GRushSdk
         public static string DisplayName = "Editor Player";
         public static string AvatarUrl = null;
         public static bool GrantProfileConsent = true;
+
+        /// <summary>
+        /// <see cref="GRushPlayer.IsCreator"/> に返す値。エディタで動かしているのは作者なので既定は true。
+        /// <see cref="SignedIn"/> が false なら、この設定によらず false。
+        /// </summary>
+        public static bool IsCreator = true;
         public static double UnreliableDropRate = 0.0;
         public static bool ShareAvailable = true;
         public static GRushShareStatus ShareStatus = GRushShareStatus.Opened;

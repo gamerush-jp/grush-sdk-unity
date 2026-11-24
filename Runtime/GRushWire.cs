@@ -18,6 +18,7 @@ namespace GRushSdk
         public string pseudoId;
         public bool isGuest;
         public bool profileConsent;
+        public bool isCreator;
         public GRushProfileWire profile;
     }
 
@@ -398,6 +399,7 @@ namespace GRushSdk
                 PseudoId = wire == null ? null : wire.pseudoId,
                 IsGuest = wire != null && wire.isGuest,
                 ProfileConsent = wire != null && wire.profileConsent,
+                IsCreator = wire != null && wire.isCreator,
             };
             if (wire != null && wire.profileConsent && wire.profile != null)
             {
