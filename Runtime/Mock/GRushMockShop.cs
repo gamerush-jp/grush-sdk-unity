@@ -5,7 +5,7 @@ using System.Text;
 namespace GRushSdk
 {
     /// <summary>
-    /// エディタ用の作者アイテム販売。<see cref="Define(string, string, int, GRushShopItemType)"/> で置いた商品を
+    /// エディタ用の作者アイテム販売。<see cref="Define(string, string, GRushShopPrice, GRushShopItemType)"/> で置いた商品を
     /// <c>Shop.ProductsAsync</c> が返す。
     /// <c>Shop.PurchaseAsync</c> は決済画面へ移らず、すぐに付与を Pending に積んで Redirecting を返し、
     /// <c>Shop.PendingReceived</c> を呼ぶ（<see cref="GRushMock.ShopPurchaseStatus"/> が Redirecting のとき）。
@@ -43,23 +43,47 @@ namespace GRushSdk
 
         /// <summary>
         /// 買い切り（<see cref="GRushShopItemType.Permanent"/>）の商品を置く。
-        /// <see cref="Define(string, string, int, GRushShopItemType)"/> と同じ。
+        /// <see cref="Define(string, string, GRushShopPrice, GRushShopItemType)"/> と同じ。
         /// </summary>
-        public static bool Define(string sku, string name, int priceJpy)
+        public static bool Define(string sku, string name, GRushShopPrice price)
         {
-            return Define(sku, name, priceJpy, GRushShopItemType.Permanent);
+            return Put(sku, name, (int)price, GRushShopItemType.Permanent);
         }
 
         /// <summary>
         /// 種類を決めて商品を置く。同じ sku は置き換える。sku が <c>^[a-z0-9][a-z0-9_.-]{0,63}$</c> でないか、
-        /// 名前が空か、価格が 1 未満か、種類が Permanent でも Consumable でもなければ置かずに false。
+        /// 名前が空か、価格が <see cref="GRushShopPrice"/> に無い値（int から変換した値など）か、
+        /// 種類が Permanent でも Consumable でもなければ置かずに false。
         /// </summary>
+        public static bool Define(string sku, string name, GRushShopPrice price, GRushShopItemType type)
+        {
+            return Put(sku, name, (int)price, type);
+        }
+
+        /// <summary>
+        /// 買い切りの商品を置く。価格が <see cref="GRushShopPrice"/> の額でなければ置かずに false。
+        /// </summary>
+        [Obsolete("価格は GRushShopPrice で渡す。Define(string, string, GRushShopPrice) を使う。")]
+        public static bool Define(string sku, string name, int priceJpy)
+        {
+            return Put(sku, name, priceJpy, GRushShopItemType.Permanent);
+        }
+
+        /// <summary>
+        /// 種類を決めて商品を置く。価格が <see cref="GRushShopPrice"/> の額でなければ置かずに false。
+        /// </summary>
+        [Obsolete("価格は GRushShopPrice で渡す。Define(string, string, GRushShopPrice, GRushShopItemType) を使う。")]
         public static bool Define(string sku, string name, int priceJpy, GRushShopItemType type)
+        {
+            return Put(sku, name, priceJpy, type);
+        }
+
+        private static bool Put(string sku, string name, int priceJpy, GRushShopItemType type)
         {
             if (
                 !GRushShopRules.IsSku(sku)
                 || string.IsNullOrEmpty(name)
-                || priceJpy < 1
+                || !GRushShopRules.IsPrice(priceJpy)
                 || GRushWire.ShopItemTypeWire(type) == null
             )
             {

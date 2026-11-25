@@ -123,6 +123,12 @@ namespace GRushSdk
             return true;
         }
 
+        // 作者が付けられる価格は GRushShopPrice の値だけ。一覧は列挙型の1か所に持つ。
+        public static bool IsPrice(int priceJpy)
+        {
+            return Enum.IsDefined(typeof(GRushShopPrice), priceJpy);
+        }
+
         public static bool IsAckIds(string[] ids)
         {
             if (ids == null || ids.Length == 0 || ids.Length > MaxAckIds)

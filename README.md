@@ -7,7 +7,7 @@ GameRush の GameAPI を Unity から呼ぶための UPM パッケージ。ビ�
 Package Manager の `Add package from git URL...` に次を入れる。
 
 ```text
-https://github.com/gamerush-jp/grush-sdk-unity.git#v1.20.0
+https://github.com/gamerush-jp/grush-sdk-unity.git#v1.21.0
 ```
 
 Unity 2021.3 以降。ビルドターゲットは WebGL。
@@ -381,11 +381,11 @@ GRushMockPlayerStates.Define("custom-rival", "{\"level\":3}", false, 1300);
 GRushMockPlayerStates.Preview(GRushMock.Rivals[0], "{\"level\":3}"); // 確認用の表示の写しを渡す
 ```
 
-作者アイテム販売のモックは、`GRushMockShop.Define(sku, name, priceJpy, type)` で置いた商品を `ProductsAsync` で返す。`type` は `GRushShopItemType.Permanent` か `Consumable` で、省くと `Permanent`。`PurchaseAsync` は決済画面へ移らず、すぐに付与を `Pending` に積んで `Redirecting` を返し、次の `Update` で `PendingReceived` を呼ぶ。置いていない sku は `InvalidParams`、`GRushMock.SignedIn = false` では `SignInRequired`、付与済み（Ack 済みを含む）の買い切りの sku は `AlreadyOwned`。消費の sku は何度でも買え、そのたびに付与を積み、`OwnedAsync` には入らない。`GRushMock.ShopPurchaseStatus` を `Cancelled`・`AlreadyOwned`・`Pending`・`Unknown` にすると、付与を積まずにその結果を返す。`Purchased` にすると、iOS のアプリと同じく付与を積んで `Purchased` を返し、`PendingReceived` は呼ばない。`PendingAsync` は GameRush と同じく1回に 100 件まで返す。`GRushMock.ShopEnabled = false` で Android のアプリと LINE と同じ（`Enabled` が `false` の空、`PurchaseAsync` は `Unsupported`）になる。`GRushMockShop.Grant(sku)` は購入を経ずに付与を積む。sku と Ack の id は GameRush と同じ形で確かめる。呼び出しの間隔の上限は再現しない。`GRushMock.Reset()` で付与は消え、置いた商品は残る（`GRushMockShop.Clear()` で消す）。
+作者アイテム販売のモックは、`GRushMockShop.Define(sku, name, price, type)` で置いた商品を `ProductsAsync` で返す。`price` は `GRushShopPrice`（`Yen100`・`Yen120`・`Yen300`・`Yen500`・`Yen1000`・`Yen2000`・`Yen3000`・`Yen5000`）で、GameRush で作者が付けられる価格だけを選べる。int で価格を渡す版は非推奨で、この価格のどれでもなければ置かずに `false` を返す。`type` は `GRushShopItemType.Permanent` か `Consumable` で、省くと `Permanent`。`PurchaseAsync` は決済画面へ移らず、すぐに付与を `Pending` に積んで `Redirecting` を返し、次の `Update` で `PendingReceived` を呼ぶ。置いていない sku は `InvalidParams`、`GRushMock.SignedIn = false` では `SignInRequired`、付与済み（Ack 済みを含む）の買い切りの sku は `AlreadyOwned`。消費の sku は何度でも買え、そのたびに付与を積み、`OwnedAsync` には入らない。`GRushMock.ShopPurchaseStatus` を `Cancelled`・`AlreadyOwned`・`Pending`・`Unknown` にすると、付与を積まずにその結果を返す。`Purchased` にすると、iOS のアプリと同じく付与を積んで `Purchased` を返し、`PendingReceived` は呼ばない。`PendingAsync` は GameRush と同じく1回に 100 件まで返す。`GRushMock.ShopEnabled = false` で Android のアプリと LINE と同じ（`Enabled` が `false` の空、`PurchaseAsync` は `Unsupported`）になる。`GRushMockShop.Grant(sku)` は購入を経ずに付与を積む。sku と Ack の id は GameRush と同じ形で確かめる。呼び出しの間隔の上限は再現しない。`GRushMock.Reset()` で付与は消え、置いた商品は残る（`GRushMockShop.Clear()` で消す）。
 
 ```csharp
-GRushMockShop.Define("stage.extra", "追加ステージ", 300); // 買い切り
-GRushMockShop.Define("potion.heal", "回復薬", 120, GRushShopItemType.Consumable);
+GRushMockShop.Define("stage.extra", "追加ステージ", GRushShopPrice.Yen300); // 買い切り
+GRushMockShop.Define("potion.heal", "回復薬", GRushShopPrice.Yen120, GRushShopItemType.Consumable);
 GRushMockShop.Grant("potion.heal"); // 購入を経ずに付与を積み、PendingReceived を呼ぶ
 ```
 

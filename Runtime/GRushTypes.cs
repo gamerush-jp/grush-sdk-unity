@@ -410,6 +410,38 @@ namespace GRushSdk
         Consumable,
     }
 
+    /// <summary>
+    /// 作者が商品に付けられる税込みの価格（円）。GameRush はこのどれかの価格だけを登録できる。
+    /// 値は円の額そのもので、<c>(int)GRushShopPrice.Yen120</c> は 120。
+    /// <c>Shop.ProductsAsync</c> は価格を <see cref="GRushShopProduct.PriceJpy"/>（int）で返す。
+    /// </summary>
+    public enum GRushShopPrice
+    {
+        /// <summary>100 円。</summary>
+        Yen100 = 100,
+
+        /// <summary>120 円。</summary>
+        Yen120 = 120,
+
+        /// <summary>300 円。</summary>
+        Yen300 = 300,
+
+        /// <summary>500 円。</summary>
+        Yen500 = 500,
+
+        /// <summary>1,000 円。</summary>
+        Yen1000 = 1000,
+
+        /// <summary>2,000 円。</summary>
+        Yen2000 = 2000,
+
+        /// <summary>3,000 円。</summary>
+        Yen3000 = 3000,
+
+        /// <summary>5,000 円。</summary>
+        Yen5000 = 5000,
+    }
+
     /// <summary>作者が登録した販売中の商品。名前・価格・種類は作者が Studio か API キーで決める。</summary>
     [Serializable]
     public struct GRushShopProduct
@@ -419,7 +451,7 @@ namespace GRushSdk
 
         public string Name;
 
-        /// <summary>税込みの価格（円）。</summary>
+        /// <summary>税込みの価格（円）。<see cref="GRushShopPrice"/> のどれかの額。</summary>
         public int PriceJpy;
 
         /// <summary>

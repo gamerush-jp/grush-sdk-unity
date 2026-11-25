@@ -134,7 +134,7 @@ namespace GRushSdk
 
         /// <summary>
         /// 表示言語・起動パラメータと招待の部屋・招待の答え・部屋・分析イベント・受信箱・交換所（通報によるブロックを含む）・
-        /// 作者アイテム販売の付与をはじめの状態へ戻す。<see cref="GRushMockShop.Define(string, string, int, GRushShopItemType)"/> で置いた商品は残る。
+        /// 作者アイテム販売の付与をはじめの状態へ戻す。<see cref="GRushMockShop.Define(string, string, GRushShopPrice, GRushShopItemType)"/> で置いた商品は残る。
         /// </summary>
         public static void Reset()
         {
