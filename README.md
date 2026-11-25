@@ -226,7 +226,7 @@ if (catalog.Ok && catalog.Value.Enabled)
 
 **消費のアイテムを、ゲーム内通貨（ほかのアイテムや機能と交換する対価）として使うことと、抽選（ガチャなど、偶然で中身が決まる仕組み）に使わせることはできない。** 販売に関する取り決めで禁じている。
 
-- 購入できるのは Web の GameRush と iOS のアプリ。Android のアプリと LINE では `PurchaseAsync` が `Unsupported`、`ProductsAsync` は `Enabled` が `false` で `Products` は空で、`PendingAsync`・`AckAsync`・`OwnedAsync` も `Unsupported`。iOS のアプリでは App Store のアプリ内課金で買い、価格が 100・120・300・500・1,000 円のどれかの商品だけが `ProductsAsync` に出る
+- 購入できるのは Web の GameRush と iOS のアプリ。Android のアプリと LINE では `PurchaseAsync` が `Unsupported`、`ProductsAsync` は `Enabled` が `false` で `Products` は空で、`PendingAsync`・`AckAsync`・`OwnedAsync` も `Unsupported`。iOS のアプリでは App Store のアプリ内課金で買い、価格が `GRushShopPrice` のどれかの商品だけが `ProductsAsync` に出る
 - `PurchaseAsync(sku)` が `Redirecting` を返すと、ページはすぐ決済画面へ移る（Web）。**ゲームは `PurchaseAsync` を呼ぶ前にセーブしておく。** iOS のアプリでは `Purchased`（買い終え、付与が `PendingAsync` に入った。続けて `PendingAsync` を読む）か `Pending`（支払いの確認や保護者の承認の待ち。済むと `PendingAsync` に入る）が返る。ほかに `Cancelled`（やめた）と `AlreadyOwned`（同じ買い切りの商品をもう持っている。消費のアイテムでは返らない）が返る。知らない値は失敗にせず `Unknown` で返り、`GRushShopPurchaseResult.RawStatus` に生の文字列が入る。`sku` が `^[a-z0-9][a-z0-9_.-]{0,63}$` でなければ送らずに `InvalidParams`。GameRush は決済の確認を最大 10 分待つ
 - 付与は `AckAsync` するまで `PendingAsync` に残る。`AckAsync` は「ゲームへ届けた」ことを表す。アイテムをセーブに反映して保存してから `AckAsync` する（渡せる id は 1〜100 件の付与 ID で、合わなければ送らずに `InvalidParams`）。起動時にも `PendingAsync` を読む
 - 反映した付与の ID をセーブに持ち、同じ付与を二度反映しない。消費のアイテムは `OwnedAsync` で組み直せないので、買い切りのアイテムよりも大事。保存の前に Ack すると、保存に失敗したときに買ったアイテムが失われる
