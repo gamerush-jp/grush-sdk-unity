@@ -7,7 +7,7 @@ GameRush の GameAPI を Unity から呼ぶための UPM パッケージ。ビ�
 Package Manager の `Add package from git URL...` に次を入れる。
 
 ```text
-https://github.com/gamerush-jp/grush-sdk-unity.git#v1.21.0
+https://github.com/gamerush-jp/grush-sdk-unity.git#v1.22.0
 ```
 
 Unity 2021.3 以降。ビルドターゲットは WebGL。
@@ -431,6 +431,16 @@ Unity -batchmode -quit -projectPath <プロジェクト> -buildTarget WebGL -exe
 | 2 | 引数が無い・出力先が危ない・GameRush のビルド以外のファイルがある出力先・WebGL モジュールが無い・有効なシーンが無い |
 | 3 | 想定外の例外 |
 | 4 | ビルドはできたが、GameRush のアップロード規則に合わない出力になった |
+
+## AI エージェント向けの文書
+
+`Documentation~/agents/` に、AI エージェント（Claude Code・Codex など）が読むための GameRush の文書を同梱している。中身は [開発者向けページ](https://gamerush.jp/developers) と同じで、守ることと文書の地図を `AGENTS.md` にまとめてある。
+
+メニューの `GameRush/AI エージェント向けの文書を入れる` を実行すると、プロジェクトのフォルダ（`Assets/` の親）に入れる。
+
+- `.gamerush/` へ文書を写す。`.gamerush/AGENTS.md` には SDK の版が入る。前の版の `.gamerush/docs/` は消して入れ直す
+- プロジェクトの `AGENTS.md`（無ければ作る）と、あれば `CLAUDE.md` に、`.gamerush/AGENTS.md` を指す段を `<!-- gamerush-agents:begin -->` と `<!-- gamerush-agents:end -->` で囲んで足す。もう一度実行すると、その段だけを書き換える
+- SDK を上げたら、もう一度実行する
 
 ## サンプル
 
