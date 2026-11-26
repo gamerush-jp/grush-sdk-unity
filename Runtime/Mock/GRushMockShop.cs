@@ -247,10 +247,21 @@ namespace GRushSdk
         /// <summary>
         /// 購入を経ずに <paramref name="sku"/> の付与を Pending に積み、付与の合図を送る。積んだ付与の ID を返す。
         /// sku の形が違えば何もせず null。置いていない sku でも積める。置いた消費の商品の付与は
-        /// <c>Shop.OwnedAsync</c> に入らない。
+        /// <c>Shop.OwnedAsync</c> に入らない。<see cref="DefineLottery"/> で置いた抽選の sku では、購入と同じく 1 つを引いて、
+        /// 当たり（かぶったときは代わり）を積む。GameRush は抽選の商品そのものを付与しない。中身か代わりが置かれていない
+        /// 抽選の sku では何もせず null。
         /// </summary>
         public static string Grant(string sku)
         {
+            var product = products.Find(item => item.Sku == sku);
+            if (product != null && product.Type == GRushShopItemType.Lottery)
+            {
+                if (!IsSellable(product))
+                {
+                    return null;
+                }
+                sku = DrawGrant(product).Sku;
+            }
             var id = AddGrant(sku);
             if (id != null)
             {
