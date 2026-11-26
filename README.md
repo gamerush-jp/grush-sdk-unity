@@ -7,7 +7,7 @@ GameRush の GameAPI を Unity から呼ぶための UPM パッケージ。ビ�
 Package Manager の `Add package from git URL...` に次を入れる。
 
 ```text
-https://github.com/gamerush-jp/grush-sdk-unity.git#v1.23.0
+https://github.com/gamerush-jp/grush-sdk-unity.git#v1.23.1
 ```
 
 Unity 2021.3 以降。ビルドターゲットは WebGL。
@@ -430,7 +430,7 @@ await GRush.Shop.PurchaseAsync("box"); // 持っているので Sku は "potion.
 - **推奨設定でビルド**: 設定を適用してから、Build Settings で有効なシーンを WebGL でビルドする（`GameRush/推奨設定でビルド` からも同じ）。出力先は既定で `<プロジェクト>/Build/GameRush`。**出力先のフォルダはビルドのたびに消して作り直す**ので、プロジェクトのフォルダそのものや `Assets/` `Packages/` `ProjectSettings/` `Library/` の中は選べない。既にあるフォルダは、中身が `Build/` `TemplateData/` `StreamingAssets/` `index.html` `ServiceWorker.js` `manifest.webmanifest` `grush.json` だけか空のときに限って消す。
 - プロジェクトの直下に `grush.json` があれば、WebGL のビルドのたびに出力先の最上位へ写す（このウィンドウ以外からの WebGL ビルドでも写す）。
 - ビルドが通ると、その出力先が「ビルドをアップロード」に入った状態になる。ログインしていればそのまま上げられる。
-- 合計サイズの目安は 15 MB 以下。30 MB 以上は読み込みが遅く、スマホで落ちることもあるので危険。50 MB を超えるとアップロードできない。
+- 合計サイズの目安は 15 MB 以下。30 MB 以上は読み込みが遅く、スマホで落ちることもあるので危険。100 MB を超えるとアップロードできない。
 
 主な推奨値は Brotli 圧縮・Decompression Fallback オフ・Threads Support オフ（GameRush の配信は COOP/COEP を付けない）・Data Caching オフ（GameRush が自前で先読みする）・WebGL 2 のみ・Development Build オフ。
 

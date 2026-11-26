@@ -8,7 +8,7 @@ namespace GRushSdk.Editor
     /// </summary>
     internal static class GRushEditorBuildRules
     {
-        public const long MaxBuildBytes = 50L * 1024 * 1024;
+        public const long MaxBuildBytes = 100L * 1024 * 1024;
         public const int MaxBuildFileCount = 2000;
         public const string GeneratedPlayerConfigPath = "__grush-player.json";
         public const string BuildCanvasSizePath = "__grush-canvas.json";
