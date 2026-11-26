@@ -7,7 +7,7 @@ GameRush の GameAPI を Unity から呼ぶための UPM パッケージ。ビ�
 Package Manager の `Add package from git URL...` に次を入れる。
 
 ```text
-https://github.com/gamerush-jp/grush-sdk-unity.git#v1.22.0
+https://github.com/gamerush-jp/grush-sdk-unity.git#v1.23.0
 ```
 
 Unity 2021.3 以降。ビルドターゲットは WebGL。
@@ -217,22 +217,25 @@ if (catalog.Ok && catalog.Value.Enabled)
 
 作者が登録した商品をプレイヤーが買い、届いた付与をゲームがセーブへ反映する。商品名・価格（`PriceJpy`、円）・種類（`Type`）は作者が Studio か API キーで登録し、ゲームは `ProductsAsync` で読む。
 
-商品の種類（`GRushShopItemType`）は 2 つ。種類を返さない古い GameRush の商品は `Permanent`。知らない値は `Unknown` で、`GRushShopProduct.RawType` に生の文字列が入る。
+商品の種類（`GRushShopItemType`）は 3 つ。種類を返さない古い GameRush の商品は `Permanent`。知らない値は `Unknown` で、`GRushShopProduct.RawType` に生の文字列が入る。
 
 | `Type` | 買える回数 | `OwnedAsync` |
 |---|---|---|
 | `Permanent`（買い切り） | 同じプレイヤーは、返金されない限り 1 回だけ | 入る |
 | `Consumable`（消費） | 同じプレイヤーが何度でも | 入らない |
+| `Lottery`（抽選） | 同じプレイヤーが何度でも。買うたびに、同じゲームの買い切りか消費のアイテムを 1 つ確率で引いて渡す | 抽選そのものは入らない。当たった買い切りのアイテムは入る |
 
-**消費のアイテムを、ゲーム内通貨（ほかのアイテムや機能と交換する対価）として使うことと、抽選（ガチャなど、偶然で中身が決まる仕組み）に使わせることはできない。** 販売に関する取り決めで禁じている。
+**消費のアイテムを、ゲーム内通貨（ほかのアイテムや機能と交換する対価）として使うことと、抽選（ガチャなど、偶然で中身が決まる仕組み）に使わせることはできない。** 販売に関する取り決めで禁じている。抽選の商品（`Lottery`）を作れるかも、販売に関する取り決めに従う。
+
+抽選の商品は、中身と確率の `Odds`（`GRushShopLotteryOdds` の `Sku`・`Name`・`Percent`。`Percent` は小数第 2 位までで合計 100）と、持っている買い切りのアイテムが当たったときの扱いの `DuplicatePolicy` を持つ。`GRushShopDuplicatePolicy.Fallback` は代わりに `FallbackSku`（名前は `FallbackName`。消費のアイテム）を渡し、`Stack` は当たったアイテムをもう 1 つ渡して `OwnedAsync` の `Count` を増やす。抽選でない商品では `Odds` は空、`DuplicatePolicy` は `None`、`FallbackSku` は `null`。抽選を返すのは `protocolVersion` が `GRush.ShopLotteryProtocolVersion`（15）以上の GameRush だけ。
 
 - 購入できるのは Web の GameRush と iOS のアプリ。Android のアプリと LINE では `PurchaseAsync` が `Unsupported`、`ProductsAsync` は `Enabled` が `false` で `Products` は空で、`PendingAsync`・`AckAsync`・`OwnedAsync` も `Unsupported`。iOS のアプリでは App Store のアプリ内課金で買い、価格が `GRushShopPrice` のどれかの商品だけが `ProductsAsync` に出る
-- `PurchaseAsync(sku)` が `Redirecting` を返すと、ページはすぐ決済画面へ移る（Web）。**ゲームは `PurchaseAsync` を呼ぶ前にセーブしておく。** iOS のアプリでは `Purchased`（買い終え、付与が `PendingAsync` に入った。続けて `PendingAsync` を読む）か `Pending`（支払いの確認や保護者の承認の待ち。済むと `PendingAsync` に入る）が返る。ほかに `Cancelled`（やめた）と `AlreadyOwned`（同じ買い切りの商品をもう持っている。消費のアイテムでは返らない）が返る。知らない値は失敗にせず `Unknown` で返り、`GRushShopPurchaseResult.RawStatus` に生の文字列が入る。`sku` が `^[a-z0-9][a-z0-9_.-]{0,63}$` でなければ送らずに `InvalidParams`。GameRush は決済の確認を最大 10 分待つ
+- `PurchaseAsync(sku)` が `Redirecting` を返すと、ページはすぐ決済画面へ移る（Web）。**ゲームは `PurchaseAsync` を呼ぶ前にセーブしておく。** iOS のアプリでは `Purchased`（買い終え、付与が `PendingAsync` に入った。続けて `PendingAsync` を読む）か `Pending`（支払いの確認や保護者の承認の待ち。済むと `PendingAsync` に入る）が返る。ほかに `Cancelled`（やめた）と `AlreadyOwned`（同じ買い切りの商品をもう持っている。消費と抽選のアイテムでは返らない）が返る。`Purchased` のときは、渡したアイテムが `GRushShopPurchaseResult.Sku` に入る（GameRush が付与を知らせたとき。`protocolVersion` 15 以上）。抽選では、当たったアイテムが `DrawnSku` に入り、持っている買い切りが当たって代わりを渡したときは `Fallback` が `true` で `Sku` が代わりのアイテム。どれも届いたアイテムを見せる演出に使い、セーブへの反映は `PendingAsync` の付与で行う。知らない値は失敗にせず `Unknown` で返り、`GRushShopPurchaseResult.RawStatus` に生の文字列が入る。`sku` が `^[a-z0-9][a-z0-9_.-]{0,63}$` でなければ送らずに `InvalidParams`。GameRush は決済の確認を最大 10 分待つ
 - 付与は `AckAsync` するまで `PendingAsync` に残る。`AckAsync` は「ゲームへ届けた」ことを表す。アイテムをセーブに反映して保存してから `AckAsync` する（渡せる id は 1〜100 件の付与 ID で、合わなければ送らずに `InvalidParams`）。起動時にも `PendingAsync` を読む
 - 反映した付与の ID をセーブに持ち、同じ付与を二度反映しない。消費のアイテムは `OwnedAsync` で組み直せないので、買い切りのアイテムよりも大事。保存の前に Ack すると、保存に失敗したときに買ったアイテムが失われる
 - `PendingAsync` は1回に最大 100 件。Ack したら、残りがあればもう一度読む
 - `PendingReceived` は決済から戻って付与が届いたときに、買った `sku` を引数に次の `Update` で呼ばれる。購読より前に届いた合図は購読したときに1回だけ渡る。購読が1つ以上あるあいだだけ GameRush から受け取る
-- `OwnedAsync` は Ack 済みを含む買い切りの付与のすべて（`GRushShopGrant.Acked`）を返す。返金された付与と、消費のアイテムの付与は入らない。機種を替えたときなど、セーブを組み直すときに読む
+- `OwnedAsync` は Ack 済みを含む買い切りのアイテムを、アイテムごとに 1 件（`GRushShopGrant.Acked`・`Count`）返す。`Count` は持っている数で、抽選の `Stack` で同じアイテムがまた当たると増え、`Id`・`CreatedAt`・`Acked` はそのアイテムの最初の付与のもの。数を返さない古い GameRush では 1。返金された付与と、消費のアイテムの付与は入らない。機種を替えたときなど、セーブを組み直すときに読む
 - ゲームの中での使用は改ざんを防げない。GameRush が保証するのは、払った人に付与が届くことまで
 - 呼び出しの間隔には上限があり、超えると `RateLimited`。`GRush.IsShopAvailable` が `false`（`protocolVersion` 12 未満）ではどれも `Unsupported` で、`PendingReceived` は呼ばれない
 
@@ -381,12 +384,27 @@ GRushMockPlayerStates.Define("custom-rival", "{\"level\":3}", false, 1300);
 GRushMockPlayerStates.Preview(GRushMock.Rivals[0], "{\"level\":3}"); // 確認用の表示の写しを渡す
 ```
 
-作者アイテム販売のモックは、`GRushMockShop.Define(sku, name, price, type)` で置いた商品を `ProductsAsync` で返す。`price` は `GRushShopPrice`（`Yen100`・`Yen120`・`Yen300`・`Yen500`・`Yen1000`・`Yen2000`・`Yen3000`・`Yen5000`）で、GameRush で作者が付けられる価格だけを選べる。int で価格を渡す版は非推奨で、この価格のどれでもなければ置かずに `false` を返す。`type` は `GRushShopItemType.Permanent` か `Consumable` で、省くと `Permanent`。`PurchaseAsync` は決済画面へ移らず、すぐに付与を `Pending` に積んで `Redirecting` を返し、次の `Update` で `PendingReceived` を呼ぶ。置いていない sku は `InvalidParams`、`GRushMock.SignedIn = false` では `SignInRequired`、付与済み（Ack 済みを含む）の買い切りの sku は `AlreadyOwned`。消費の sku は何度でも買え、そのたびに付与を積み、`OwnedAsync` には入らない。`GRushMock.ShopPurchaseStatus` を `Cancelled`・`AlreadyOwned`・`Pending`・`Unknown` にすると、付与を積まずにその結果を返す。`Purchased` にすると、iOS のアプリと同じく付与を積んで `Purchased` を返し、`PendingReceived` は呼ばない。`PendingAsync` は GameRush と同じく1回に 100 件まで返す。`GRushMock.ShopEnabled = false` で Android のアプリと LINE と同じ（`Enabled` が `false` の空、`PurchaseAsync` は `Unsupported`）になる。`GRushMockShop.Grant(sku)` は購入を経ずに付与を積む。sku と Ack の id は GameRush と同じ形で確かめる。呼び出しの間隔の上限は再現しない。`GRushMock.Reset()` で付与は消え、置いた商品は残る（`GRushMockShop.Clear()` で消す）。
+作者アイテム販売のモックは、`GRushMockShop.Define(sku, name, price, type)` で置いた商品を `ProductsAsync` で返す。`price` は `GRushShopPrice`（`Yen100`・`Yen120`・`Yen300`・`Yen500`・`Yen1000`・`Yen2000`・`Yen3000`・`Yen5000`）で、GameRush で作者が付けられる価格だけを選べる。int で価格を渡す版は非推奨で、この価格のどれでもなければ置かずに `false` を返す。`type` は `GRushShopItemType.Permanent` か `Consumable` で、省くと `Permanent`（抽選は `DefineLottery` で置く。下記）。`PurchaseAsync` は決済画面へ移らず、すぐに付与を `Pending` に積んで `Redirecting` を返し、次の `Update` で `PendingReceived` を呼ぶ。置いていない sku は `InvalidParams`、`GRushMock.SignedIn = false` では `SignInRequired`、付与済み（Ack 済みを含む）の買い切りの sku は `AlreadyOwned`。消費の sku は何度でも買え、そのたびに付与を積み、`OwnedAsync` には入らない。`GRushMock.ShopPurchaseStatus` を `Cancelled`・`AlreadyOwned`・`Pending`・`Unknown` にすると、付与を積まずにその結果を返す。`Purchased` にすると、iOS のアプリと同じく付与を積んで `Purchased` と渡した `Sku` を返し、`PendingReceived` は呼ばない。`PendingAsync` は GameRush と同じく1回に 100 件まで返す。`GRushMock.ShopEnabled = false` で Android のアプリと LINE と同じ（`Enabled` が `false` の空、`PurchaseAsync` は `Unsupported`）になる。`GRushMockShop.Grant(sku)` は購入を経ずに付与を積む。sku と Ack の id は GameRush と同じ形で確かめる。呼び出しの間隔の上限は再現しない。`GRushMock.Reset()` で付与は消え、置いた商品は残る（`GRushMockShop.Clear()` で消す）。
+
+抽選は `GRushMockShop.DefineLottery(sku, name, price, odds, policy, fallbackSku)` で置く。GameRush の Studio で登録するときと同じく、中身と確率を `GRushMockShopOdds(sku, weightBp)` の配列（`weightBp` はベーシスポイントで 1 = 0.01%、合計 10000、2〜30 件の別々の sku）で、かぶりの扱いを `GRushShopDuplicatePolicy.Fallback` か `Stack` で、`Fallback` のときの代わりを `fallbackSku` で渡す（`Stack` では省く）。形が合わなければ置かずに `false`。中身は `Define` で置いた買い切りか消費の商品、`fallbackSku` は消費の商品で、そうでない抽選は `ProductsAsync` に出ず、買えない。`ProductsAsync` は GameRush と同じく `Odds` を名前と `Percent` で返す。`PurchaseAsync` は確率どおりに 1 つを引いて付与し、`Purchased` では `Sku`・`DrawnSku`・`Fallback` を返す。`GRushMock.ShopLotteryDraw` に中身の sku を入れると、確率によらずそれを当てる（かぶりの扱いを試すとき。`null` で確率どおり）。
 
 ```csharp
 GRushMockShop.Define("stage.extra", "追加ステージ", GRushShopPrice.Yen300); // 買い切り
 GRushMockShop.Define("potion.heal", "回復薬", GRushShopPrice.Yen120, GRushShopItemType.Consumable);
+GRushMockShop.DefineLottery(
+    "box",
+    "ふくびき",
+    GRushShopPrice.Yen120,
+    new[] { new GRushMockShopOdds("stage.extra", 1000), new GRushMockShopOdds("potion.heal", 9000) }, // 10% と 90%
+    GRushShopDuplicatePolicy.Fallback,
+    "potion.heal"
+);
 GRushMockShop.Grant("potion.heal"); // 購入を経ずに付与を積み、PendingReceived を呼ぶ
+
+GRushMock.ShopPurchaseStatus = GRushShopPurchaseStatus.Purchased;
+GRushMock.ShopLotteryDraw = "stage.extra";
+await GRush.Shop.PurchaseAsync("box"); // Sku・DrawnSku は "stage.extra"、Fallback は false
+await GRush.Shop.PurchaseAsync("box"); // 持っているので Sku は "potion.heal"、DrawnSku は "stage.extra"、Fallback は true
 ```
 
 確認用の表示のモックは `GRushMockPlayerStates.Preview(pseudoId, payloadJson)` で写しを1つ渡し、次の `Update` で `PreviewReceived` が呼ばれる。`Preview(pseudoId, payloadJson, revision, rating)` で revision と rating を決められる（既定は revision 1、rating は無し。`null` なら rating は無し）。updatedAt は呼んだ時刻（UTC）。購読が無いうちに渡した写しは、次に購読したときに1回だけ届く。疑似 ID が空・payload が JSON オブジェクトでない・revision が負・rating が NaN か無限大のときは何もしない。`GRushMockPlayerStates.Reset()` で、まだ届いていない写しを捨てる。

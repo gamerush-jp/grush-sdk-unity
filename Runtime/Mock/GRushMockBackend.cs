@@ -26,10 +26,10 @@ namespace GRushSdk
             get { return true; }
         }
 
-        // モックが実装している一番新しい機能（部屋への招待）の版数。
+        // モックが実装している一番新しい機能（作者アイテム販売の抽選）の版数。
         public int ProtocolVersion
         {
-            get { return GRush.InviteProtocolVersion; }
+            get { return GRush.ShopLotteryProtocolVersion; }
         }
 
         public bool IsAnalyticsAvailable

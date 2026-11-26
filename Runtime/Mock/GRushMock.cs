@@ -43,6 +43,12 @@ namespace GRushSdk
         public static GRushShopPurchaseStatus ShopPurchaseStatus = GRushShopPurchaseStatus.Redirecting;
 
         /// <summary>
+        /// 抽選（<see cref="GRushMockShop.DefineLottery"/>）で必ず当てるアイテムの sku。その抽選の中身に無い sku と null では、
+        /// 確率どおりに引く。かぶりの扱いを試すのに使う。
+        /// </summary>
+        public static string ShopLotteryDraw;
+
+        /// <summary>
         /// <see cref="GRush.Launch"/> が返す起動パラメータ（<c>gp.</c> を除いたキーと値）。
         /// GameRush の制限（キー・値の形と 8 個まで）では確かめずにそのまま返す。<see cref="Reset"/> で空になる。
         /// </summary>

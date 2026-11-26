@@ -46,6 +46,13 @@ namespace GRushSdk
         /// </summary>
         public const int InviteProtocolVersion = 13;
 
+        /// <summary>
+        /// 作者アイテム販売の抽選（<see cref="GRushShopItemType.Lottery"/>）に要る版数。これより古い GameRush では
+        /// <c>Shop.ProductsAsync</c> に抽選が出ず、<c>Shop.PurchaseAsync</c> の結果に <see cref="GRushShopPurchaseResult.Sku"/>
+        /// などが載らず、<c>Shop.OwnedAsync</c> の <see cref="GRushShopGrant.Count"/> は 1。
+        /// </summary>
+        public const int ShopLotteryProtocolVersion = 15;
+
         public const int MaxMessageBytes = 8 * 1024;
 
         private static IGRushBackend backend;

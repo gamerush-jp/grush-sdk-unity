@@ -390,7 +390,8 @@ namespace GRushSdk
 
     /// <summary>
     /// 作者のアイテムの種類。作者が商品を登録するときに決め、後から変えられない。
-    /// 消費のアイテムを、ゲーム内通貨（ほかのアイテムや機能と交換する対価）と抽選（偶然で中身が決まる仕組み）に使ってはならない。
+    /// 消費のアイテムを、ゲーム内通貨（ほかのアイテムや機能と交換する対価）として使ってはならない。抽選の商品を作れるかは、
+    /// GameRush の販売に関する取り決めに従う。
     /// </summary>
     public enum GRushShopItemType
     {
@@ -408,6 +409,44 @@ namespace GRushSdk
         /// <c>Shop.OwnedAsync</c> には入らない。
         /// </summary>
         Consumable,
+
+        /// <summary>
+        /// 抽選。同じプレイヤーが何度でも買え、買うたびに同じゲームの買い切りか消費のアイテムを 1 つ、確率
+        /// （<see cref="GRushShopProduct.Odds"/>）に従って引いて、その付与を <c>Shop.PendingAsync</c> に入れる。抽選そのものは
+        /// <c>Shop.OwnedAsync</c> に入らない。<see cref="GRush.ShopLotteryProtocolVersion"/> 以上の GameRush だけが返す。
+        /// </summary>
+        Lottery,
+    }
+
+    /// <summary>抽選で、持っている買い切りのアイテムが当たったときの扱い。</summary>
+    public enum GRushShopDuplicatePolicy
+    {
+        /// <summary>抽選でない商品。</summary>
+        None,
+
+        /// <summary>
+        /// 代わりに <see cref="GRushShopProduct.FallbackSku"/> のアイテム（消費のアイテム）を渡す。
+        /// </summary>
+        Fallback,
+
+        /// <summary>
+        /// 当たったアイテムをもう 1 つ渡す。<c>Shop.OwnedAsync</c> の <see cref="GRushShopGrant.Count"/> が増える。
+        /// </summary>
+        Stack,
+    }
+
+    /// <summary>抽選の中身の 1 件。</summary>
+    [Serializable]
+    public struct GRushShopLotteryOdds
+    {
+        /// <summary>当たるアイテムの sku（同じゲームの買い切りか消費のアイテム）。</summary>
+        public string Sku;
+
+        /// <summary>当たるアイテムの名前。</summary>
+        public string Name;
+
+        /// <summary>当たる確率（%）。小数第 2 位まで。1 つの抽選の合計は 100。</summary>
+        public double Percent;
     }
 
     /// <summary>
@@ -461,10 +500,25 @@ namespace GRushSdk
         public GRushShopItemType Type;
 
         /// <summary>
-        /// GameRush が返した種類の文字列（<c>"permanent"</c> か <c>"consumable"</c>）。
+        /// GameRush が返した種類の文字列（<c>"permanent"</c>・<c>"consumable"</c>・<c>"lottery"</c>）。
         /// 種類を返さない古い GameRush の商品は <c>"permanent"</c>。<see cref="Type"/> が Unknown のときに中身を見る。
         /// </summary>
         public string RawType;
+
+        /// <summary>抽選（<see cref="GRushShopItemType.Lottery"/>）の中身と確率。抽選でない商品では空の配列。</summary>
+        public GRushShopLotteryOdds[] Odds;
+
+        /// <summary>抽選のかぶりの扱い。抽選でない商品では <see cref="GRushShopDuplicatePolicy.None"/>。</summary>
+        public GRushShopDuplicatePolicy DuplicatePolicy;
+
+        /// <summary>
+        /// <see cref="DuplicatePolicy"/> が <see cref="GRushShopDuplicatePolicy.Fallback"/> のときに代わりに渡すアイテム
+        /// （消費のアイテム）の sku。ほかは null。
+        /// </summary>
+        public string FallbackSku;
+
+        /// <summary><see cref="FallbackSku"/> のアイテムの名前。ほかは null。</summary>
+        public string FallbackName;
     }
 
     [Serializable]
@@ -514,7 +568,7 @@ namespace GRushSdk
         /// <summary>プレイヤーが購入をやめた。</summary>
         Cancelled,
 
-        /// <summary>同じ買い切りの商品をもう持っている。消費のアイテムでは返らない。</summary>
+        /// <summary>同じ買い切りの商品をもう持っている。消費と抽選のアイテムでは返らない。</summary>
         AlreadyOwned,
 
         /// <summary>買い終え、付与が <c>Shop.PendingAsync</c> に入った（iOS のアプリ）。続けて <c>Shop.PendingAsync</c> を読む。</summary>
@@ -533,6 +587,21 @@ namespace GRushSdk
 
         /// <summary>GameRush が返した status の文字列（<c>"redirecting"</c> など）。Unknown のときに中身を見る。</summary>
         public string RawStatus;
+
+        /// <summary>
+        /// 渡したアイテムの sku。<see cref="GRushShopPurchaseStatus.Purchased"/> のときだけ、GameRush が付与を知らせたら入る
+        /// （<see cref="GRush.ShopLotteryProtocolVersion"/> 以上）。ほかは null。抽選では、当たったアイテムか、かぶったときの
+        /// 代わりのアイテム。届いたアイテムを見せる演出に使い、セーブへの反映は <c>Shop.PendingAsync</c> の付与で行う。
+        /// </summary>
+        public string Sku;
+
+        /// <summary>抽選だけ。当たったアイテムの sku。抽選でなければ null。</summary>
+        public string DrawnSku;
+
+        /// <summary>
+        /// 抽選だけ。持っている買い切りのアイテムが当たり、代わり（<see cref="GRushShopProduct.FallbackSku"/>）を渡したとき true。
+        /// </summary>
+        public bool Fallback;
     }
 
     /// <summary>
@@ -553,6 +622,13 @@ namespace GRushSdk
         /// Ack（ゲームへ届けた）済みか。<c>Shop.PendingAsync</c> の付与では常に false。
         /// </summary>
         public bool Acked;
+
+        /// <summary>
+        /// 持っている数。<c>Shop.OwnedAsync</c> はアイテムごとに 1 件を返し、抽選（<see cref="GRushShopDuplicatePolicy.Stack"/>）で
+        /// 同じアイテムがまた当たると増える。<see cref="Id"/>・<see cref="CreatedAt"/>・<see cref="Acked"/> はそのアイテムの最初の
+        /// 付与のもの。数を返さない古い GameRush と <c>Shop.PendingAsync</c> の付与では 1。
+        /// </summary>
+        public int Count;
     }
 
     public static class GRushChannels

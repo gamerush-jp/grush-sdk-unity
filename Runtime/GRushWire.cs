@@ -165,12 +165,32 @@ namespace GRushSdk
     }
 
     [Serializable]
+    internal class GRushShopOddsWire
+    {
+        public string sku;
+        public string name;
+        public double percent;
+    }
+
+    [Serializable]
+    internal class GRushShopItemRefWire
+    {
+        public string sku;
+        public string name;
+    }
+
+    [Serializable]
     internal class GRushShopProductWire
     {
         public string sku;
         public string name;
         public int priceJpy;
         public string type;
+
+        // 抽選の商品だけが持つ。JsonUtility は null のオブジェクトも既定値のオブジェクトとして読むので、fallback は sku で見る。
+        public GRushShopOddsWire[] odds;
+        public string duplicatePolicy;
+        public GRushShopItemRefWire fallback;
     }
 
     [Serializable]
@@ -184,6 +204,9 @@ namespace GRushSdk
     internal class GRushShopPurchaseWire
     {
         public string status;
+        public string sku;
+        public string drawnSku;
+        public bool fallback;
     }
 
     [Serializable]
@@ -193,6 +216,9 @@ namespace GRushSdk
         public string sku;
         public string createdAt;
         public bool acked;
+
+        // 持っている数。返さない GameRush では JsonUtility が 0 で読む。
+        public int count;
     }
 
     [Serializable]
@@ -826,6 +852,8 @@ namespace GRushSdk
                     return GRushShopItemType.Permanent;
                 case "consumable":
                     return GRushShopItemType.Consumable;
+                case "lottery":
+                    return GRushShopItemType.Lottery;
                 default:
                     return GRushShopItemType.Unknown;
             }
@@ -839,12 +867,15 @@ namespace GRushSdk
                     return "permanent";
                 case GRushShopItemType.Consumable:
                     return "consumable";
+                case GRushShopItemType.Lottery:
+                    return "lottery";
                 default:
                     return null;
             }
         }
 
-        public static GRushShopProduct[] ToShopProducts(GRushShopProductWire[] wires)
+        // lotteries は、抽選を返す版数（GRush.ShopLotteryProtocolVersion）以上のランタイムか。
+        public static GRushShopProduct[] ToShopProducts(GRushShopProductWire[] wires, bool lotteries)
         {
             var source = wires ?? new GRushShopProductWire[0];
             var products = new List<GRushShopProduct>(source.Length);
@@ -853,19 +884,87 @@ namespace GRushSdk
                 if (wire != null && !string.IsNullOrEmpty(wire.sku))
                 {
                     var rawType = ShopRawTypeOf(wire.type);
-                    products.Add(
-                        new GRushShopProduct
-                        {
-                            Sku = wire.sku,
-                            Name = wire.name ?? string.Empty,
-                            PriceJpy = wire.priceJpy,
-                            Type = ShopItemTypeOf(rawType),
-                            RawType = rawType,
-                        }
-                    );
+                    var product = new GRushShopProduct
+                    {
+                        Sku = wire.sku,
+                        Name = wire.name ?? string.Empty,
+                        PriceJpy = wire.priceJpy,
+                        Type = ShopItemTypeOf(rawType),
+                        RawType = rawType,
+                        Odds = new GRushShopLotteryOdds[0],
+                        DuplicatePolicy = GRushShopDuplicatePolicy.None,
+                    };
+                    // 抽選は確率の表を付けずには見せない。版数 15 より古いランタイムは抽選を返さないので、来ても外す。
+                    if (product.Type != GRushShopItemType.Lottery || (lotteries && TryReadLottery(wire, ref product)))
+                    {
+                        products.Add(product);
+                    }
                 }
             }
             return products.ToArray();
+        }
+
+        private static bool TryReadLottery(GRushShopProductWire wire, ref GRushShopProduct product)
+        {
+            if (wire.odds == null || wire.odds.Length == 0)
+            {
+                return false;
+            }
+            var odds = new GRushShopLotteryOdds[wire.odds.Length];
+            for (var index = 0; index < odds.Length; index++)
+            {
+                var entry = wire.odds[index];
+                if (entry == null || string.IsNullOrEmpty(entry.sku))
+                {
+                    return false;
+                }
+                odds[index] = new GRushShopLotteryOdds
+                {
+                    Sku = entry.sku,
+                    Name = entry.name ?? string.Empty,
+                    Percent = entry.percent,
+                };
+            }
+            switch (wire.duplicatePolicy)
+            {
+                case "stack":
+                    product.DuplicatePolicy = GRushShopDuplicatePolicy.Stack;
+                    break;
+                case "fallback":
+                    if (wire.fallback == null || string.IsNullOrEmpty(wire.fallback.sku))
+                    {
+                        return false;
+                    }
+                    product.DuplicatePolicy = GRushShopDuplicatePolicy.Fallback;
+                    product.FallbackSku = wire.fallback.sku;
+                    product.FallbackName = wire.fallback.name ?? string.Empty;
+                    break;
+                default:
+                    return false;
+            }
+            product.Odds = odds;
+            return true;
+        }
+
+        // sku は purchased のときだけ読む。抽選の結果（drawnSku と fallback）は sku があるときだけ読む。
+        public static GRushShopPurchaseResult ToShopPurchaseResult(GRushShopPurchaseWire wire)
+        {
+            var result = new GRushShopPurchaseResult
+            {
+                Status = ShopPurchaseStatusOf(wire.status),
+                RawStatus = wire.status,
+            };
+            if (wire.status != "purchased" || string.IsNullOrEmpty(wire.sku))
+            {
+                return result;
+            }
+            result.Sku = wire.sku;
+            if (!string.IsNullOrEmpty(wire.drawnSku))
+            {
+                result.DrawnSku = wire.drawnSku;
+                result.Fallback = wire.fallback;
+            }
+            return result;
         }
 
         public static GRushShopGrant[] ToShopGrants(GRushShopGrantWire[] wires)
@@ -884,6 +983,7 @@ namespace GRushSdk
                             Sku = wire.sku,
                             CreatedAt = wire.createdAt,
                             Acked = wire.acked,
+                            Count = wire.count >= 1 ? wire.count : 1,
                         }
                     );
                 }

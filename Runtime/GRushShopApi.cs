@@ -7,9 +7,10 @@ namespace GRushSdk
     /// 作者アイテム販売。作者が登録した商品をプレイヤーが買い、届いた付与をゲームがセーブへ反映する。
     /// 商品名・価格・種類は作者が Studio か API キーで登録し、ゲームは <see cref="ProductsAsync"/> で読む。
     ///
-    /// 種類は買い切り（<see cref="GRushShopItemType.Permanent"/>）と消費（<see cref="GRushShopItemType.Consumable"/>）の
-    /// 2 つ。消費のアイテムは何度でも買え、<see cref="OwnedAsync"/> に入らない。消費のアイテムを、ゲーム内通貨
-    /// （ほかのアイテムや機能と交換する対価）と抽選（偶然で中身が決まる仕組み）に使ってはならない。
+    /// 種類は買い切り（<see cref="GRushShopItemType.Permanent"/>）と消費（<see cref="GRushShopItemType.Consumable"/>）と
+    /// 抽選（<see cref="GRushShopItemType.Lottery"/>）の 3 つ。消費と抽選のアイテムは何度でも買え、<see cref="OwnedAsync"/> に
+    /// 入らない。抽選は買うたびに買い切りか消費のアイテムを 1 つ確率で引いて渡す。消費のアイテムを、ゲーム内通貨
+    /// （ほかのアイテムや機能と交換する対価）として使ってはならない。抽選の商品を作れるかは、GameRush の販売に関する取り決めに従う。
     ///
     /// 購入できるのは Web の GameRush と iOS のアプリ。Android のアプリと LINE では <see cref="PurchaseAsync"/> が
     /// Unsupported、<see cref="ProductsAsync"/> は Enabled が false で空で、<see cref="PendingAsync"/>・
@@ -120,7 +121,10 @@ namespace GRushSdk
                     Enabled = wire.enabled,
                     // 買えない面では、ランタイムが商品を返しても見せない。
                     Products = wire.enabled
-                        ? GRushWire.ToShopProducts(wire.products)
+                        ? GRushWire.ToShopProducts(
+                            wire.products,
+                            GRush.ProtocolVersion >= GRush.ShopLotteryProtocolVersion
+                        )
                         : new GRushShopProduct[0],
                 }
             );
@@ -130,7 +134,9 @@ namespace GRushSdk
         /// <paramref name="sku"/> の商品を買う。**呼ぶ前にセーブを保存すること。** Redirecting が返ると
         /// ページはすぐ決済画面へ移り、付与は戻ってから Pending に届く（Web）。iOS のアプリでは Purchased
         /// （付与が Pending に入った）か Pending（確かめ・承認の待ち）が返る。買い切りの商品をもう持っていれば
-        /// AlreadyOwned で、消費の商品では返らない。sku が
+        /// AlreadyOwned で、消費と抽選の商品では返らない。Purchased では、渡したアイテムが
+        /// <see cref="GRushShopPurchaseResult.Sku"/> に、抽選では当たったアイテムとかぶったかが
+        /// <see cref="GRushShopPurchaseResult.DrawnSku"/> と <see cref="GRushShopPurchaseResult.Fallback"/> に入る。sku が
         /// <c>^[a-z0-9][a-z0-9_.-]{0,63}$</c> でなければ送らずに InvalidParams。Android のアプリと LINE では Unsupported。
         /// GameRush の確認と決済を待つので、ほかの呼び出しより長く（最大 10 分）待つ。
         /// </summary>
@@ -161,13 +167,7 @@ namespace GRushSdk
                 );
             }
             // 新しい GameRush が足した status でも購入は進んでいることがあるので、失敗にせず Unknown と生の値で返す。
-            return GRushResult<GRushShopPurchaseResult>.Success(
-                new GRushShopPurchaseResult
-                {
-                    Status = GRushWire.ShopPurchaseStatusOf(wire.status),
-                    RawStatus = wire.status,
-                }
-            );
+            return GRushResult<GRushShopPurchaseResult>.Success(GRushWire.ToShopPurchaseResult(wire));
         }
 
         /// <summary>
@@ -214,7 +214,8 @@ namespace GRushSdk
         }
 
         /// <summary>
-        /// このゲームで受け取った買い切りの付与のすべて（Ack 済みを含む）。返金された付与と、消費のアイテムの付与は入らない。
+        /// このゲームで持っている買い切りのアイテムを、アイテムごとに 1 件（Ack 済みを含む）。持っている数は
+        /// <see cref="GRushShopGrant.Count"/>。返金された付与と、消費のアイテムの付与は入らない。
         /// 機種を替えたときなど、セーブを組み直すときに読む。
         /// </summary>
         public Task<GRushResult<GRushShopGrant[]>> OwnedAsync()
